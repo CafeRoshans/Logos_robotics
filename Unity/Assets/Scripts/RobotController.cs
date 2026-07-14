@@ -12,6 +12,9 @@ public class RobotController : MonoBehaviour
 
     void Start()
     {
+        // interpolation = RigidbodyInterpolation.Interpolate;
+        // collisionDetectionMode = CollisionDetectionMode.Continuous;
+
         rb = GetComponent<Rigidbody>();
         if (rb == null)
         {

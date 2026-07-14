@@ -12,6 +12,9 @@ Unity/*.log
 Unity/[Mm]emoryCaptures/
 Unity/[Rr]ecordings/
 
+# ML-Agents автогенерируемые тайминги — шумят в diff'ах
+Unity/[Aa]ssets/ML-Agents/Timers/
+
 # --- ФАЙЛЫ И ПАПКИ, КОТОРЫЕ НУЖНО КОММИТИТЬ (ProjectSettings, Assets, Packages) ---
 # Они не указаны здесь, поэтому Git добавит их по умолчанию. 
 # Но мы явно разрешаем папку настроек, на всякий случай:
@@ -50,6 +53,8 @@ mono_crash.*
 crashlytics-build.properties
 InitTestScene*.unity*
 
+.DS_Store
+.vscode/
 # Visual Scripting auto-generated files
 Unity/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
 Unity/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db.meta
