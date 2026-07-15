@@ -2,153 +2,152 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Контроллер гусеничного робота с дифференциальным приводом.
-/// Принимает команды gas [-1..1] и steer [-1..1],
-/// переводит в PWM с учётом мёртвой зоны и применяет к Rigidbody.
+/// Кинематический контроллер гусеничного робота с дифференциальным приводом.
+/// Управление: 2 параметра скорости гусениц [-1..1] (leftInput/rightInput) —
+/// именно этот интерфейс ожидает нейронка / ML-Agents brain.
+/// Повороты считаются точной кинематической формулой на основе реального
+/// расстояния между гусеницами (trackWidth), а не подобранной вручную константой.
+/// Силы на Rigidbody НЕ прикладываются — движение целиком через MovePosition/MoveRotation.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class TrackController : MonoBehaviour
 {
-    [Header("Скорости")]
-    [Tooltip("Базовая линейная скорость (м/с)")]
-    public float moveSpeed = 0.57f;
+    [Header("Клавиши (ручной тест)")]
+    public Key leftForwardKey = Key.W;
+    public Key leftBackwardKey = Key.S;
+    public Key rightForwardKey = Key.E;
+    public Key rightBackwardKey = Key.D;
 
-    [Tooltip("Базовая скорость поворота (град/с)")]
-    public float turnSpeed = 120f;
+    [Header("Точки гусениц — задают реальную колею робота")]
+    [Tooltip("Дочерние объекты, размещённые в позициях левой/правой гусеницы")]
+    public Transform leftTrackPoint;
+    public Transform rightTrackPoint;
 
-    [Tooltip("Коэффициент влияния поворота на скорость гусениц")]
-    public float turnK = 0.30f;
+    [Header("Скорость")]
+    public float maxLinearCmd = 0.8f;
 
-    [Tooltip("Лимит поступательной скорости (м/с)")]
-    public float maxLinearCmd = 0.25f;
+    [Tooltip("Реалистичный потолок скорости разворота, град/с. " +
+            "Не даёт роботу улетать в нереалистичное вращение даже при ошибке в геометрии.")]
+    public float maxAngularSpeedDeg = 200f; // подбери под реальный робот, если появятся данные
 
-    [Header("Параметры PWM")]
-    [Tooltip("Мёртвая зона мотора (% PWM) — ниже этого значения мотор стоит")]
+    [Header("Параметры PWM (эмуляция реального мотора)")]
     public float motorDeadzone = 10f;
-
-    [Tooltip("Минимальный стартовый порог PWM для трогания")]
     public float minMotorPwm = 35f;
-
-    [Tooltip("Максимальное изменение PWM за один FixedUpdate (плавность разгона)")]
     public float maxPwmStep = 15f;
-
-    [Tooltip("Коэффициент перевода м/с → PWM (подбирается под диаметр колеса/редуктор)")]
     public float velocityToPwm = 200f;
 
-    // Текущие значения PWM для сглаживания
-    private float _currentPwmLeft  = 0f;
-    private float _currentPwmRight = 0f;
+    [Header("Управление")]
+    [Tooltip("true — клавиатура пишет в leftInput/rightInput. " +
+             "Выключай, когда роботом управляет ML-Agents (тогда вызывай SetTrackInputs напрямую).")]
+    public bool useManualInput = true;
 
-    private Rigidbody _rb;
+    // Главный интерфейс: именно эти 2 числа будет подавать нейронка
+    [HideInInspector] public float leftInput = 0f;   // [-1..1]
+    [HideInInspector] public float rightInput = 0f;  // [-1..1]
 
-    [Header("Ручной ввод")]
-    [Tooltip("Если true — читает WASD/стрелки с клавиатуры и перезаписывает gas/steer. " +
-             "Выключай, когда роботом управляет RobotBrain (ML-Agents), иначе клавиатура затирает команды сети.")]
-    public bool useManualInput = false;
-
-    // Входные команды (задаются извне: вручную или из MLAgents)
-    [HideInInspector] public float gas   = 0f;  // [-1..1]
-    [HideInInspector] public float steer = 0f;  // [-1..1]
+    Rigidbody rb;
+    float trackWidth;               // расстояние между гусеницами, считается один раз
+    float currentPwmLeft, currentPwmRight;
 
     void Awake()
     {
-        _rb = GetComponent<Rigidbody>();
+        rb = GetComponent<Rigidbody>();
+        rb.isKinematic = true; // силы не нужны — двигаем вручную
+
+        trackWidth = Vector3.Distance(leftTrackPoint.localPosition, rightTrackPoint.localPosition);
+        if (trackWidth < 0.01f)
+            Debug.LogWarning("TrackController: trackWidth почти 0 — проверь позиции leftTrackPoint/rightTrackPoint, повороты будут неадекватными.");
+    }
+
+    public void SetTrackInputs(float left, float right)
+    {
+        leftInput = Mathf.Clamp(left, -1f, 1f);
+        rightInput = Mathf.Clamp(right, -1f, 1f);
     }
 
     void Update()
     {
         if (!useManualInput) return;
 
-        // Ручное управление с клавиатуры (новый Input System, для теста без ML-Agents)
         var kb = Keyboard.current;
         if (kb == null) return;
 
-        gas   = kb.wKey.ReadValue() - kb.sKey.ReadValue()   // W вперёд, S назад
-              + kb.upArrowKey.ReadValue() - kb.downArrowKey.ReadValue();
-        steer = kb.dKey.ReadValue() - kb.aKey.ReadValue()   // D вправо, A влево
-              + kb.rightArrowKey.ReadValue() - kb.leftArrowKey.ReadValue();
+        float left = 0f;
+        if (kb[leftForwardKey].isPressed) left += 1f;
+        if (kb[leftBackwardKey].isPressed) left -= 1f;
 
-        gas   = Mathf.Clamp(gas,   -1f, 1f);
-        steer = Mathf.Clamp(steer, -1f, 1f);
+        float right = 0f;
+        if (kb[rightForwardKey].isPressed) right += 1f;
+        if (kb[rightBackwardKey].isPressed) right -= 1f;
+
+        SetTrackInputs(left, right);
     }
 
     void FixedUpdate()
     {
-        // 1. Смешивание скоростей — дифференциальный привод
-        float linearCmd = Mathf.Clamp(gas * maxLinearCmd, -maxLinearCmd, maxLinearCmd);
-        float turnCmd   = steer * turnK;
+        // 1) Команда скорости гусеницы напрямую из входа
+        float leftCmdSpeed = leftInput * maxLinearCmd;
+        float rightCmdSpeed = rightInput * maxLinearCmd;
 
-        float leftSpeed  = linearCmd + turnCmd;   // м/с левый борт
-        float rightSpeed = linearCmd - turnCmd;   // м/с правый борт
+        // 2) Скорость → PWM (мёртвая зона, минимальный порог)
+        float targetPwmLeft = SpeedToPwm(leftCmdSpeed);
+        float targetPwmRight = SpeedToPwm(rightCmdSpeed);
 
-        // 2. Перевод физической скорости → целевой PWM
-        float targetPwmLeft  = SpeedToPwm(leftSpeed);
-        float targetPwmRight = SpeedToPwm(rightSpeed);
+        // 3) Плавный разгон/торможение PWM
+        currentPwmLeft = StepToward(currentPwmLeft, targetPwmLeft, maxPwmStep);
+        currentPwmRight = StepToward(currentPwmRight, targetPwmRight, maxPwmStep);
 
-        // 3. Сглаживание разгона (ramp)
-        _currentPwmLeft  = StepToward(_currentPwmLeft,  targetPwmLeft,  maxPwmStep);
-        _currentPwmRight = StepToward(_currentPwmRight, targetPwmRight, maxPwmStep);
+        // 4) PWM обратно → реальная скорость каждой гусеницы, м/с
+        float effLeft = PwmToSpeed(currentPwmLeft) * maxLinearCmd;
+        float effRight = PwmToSpeed(currentPwmRight) * maxLinearCmd;
 
-        // 4. Перевод PWM обратно → физическая скорость для Unity
-        float effectiveLeft  = PwmToSpeed(_currentPwmLeft);
-        float effectiveRight = PwmToSpeed(_currentPwmRight);
+        // 5) Точная кинематика дифференциального привода на основе реальной колеи
+        float linearVelocity = (effLeft + effRight) * 0.5f;
+        float angularVelocityRad = (effRight - effLeft) / trackWidth/100;
+        float angularVelocityDeg = angularVelocityRad * Mathf.Rad2Deg;
+        angularVelocityDeg = Mathf.Clamp(angularVelocityDeg, -maxAngularSpeedDeg, maxAngularSpeedDeg); // страховка
 
-        float linearVelocity  = (effectiveLeft + effectiveRight) * 0.5f * moveSpeed;
-        float angularVelocity = (effectiveRight - effectiveLeft) / moveSpeed * turnSpeed;
+        // 6) Применение к Rigidbody без сил
+        Vector3 newPos = rb.position + transform.forward * linearVelocity * Time.fixedDeltaTime;
+        Quaternion deltaRot = Quaternion.Euler(0f, -angularVelocityDeg * Time.fixedDeltaTime, 0f);
+        // минус — компенсация направления Y-поворота в Unity (см. предыдущий баг с W/E)
 
-        // 5. Применение к Rigidbody
-        Vector3 newPosition = _rb.position + transform.forward * linearVelocity * Time.fixedDeltaTime;
-        _rb.MovePosition(newPosition);
-
-        Quaternion deltaRotation = Quaternion.Euler(0f, angularVelocity * Time.fixedDeltaTime, 0f);
-        _rb.MoveRotation(_rb.rotation * deltaRotation);
+        rb.MovePosition(newPos);
+        rb.MoveRotation(rb.rotation * deltaRot);
     }
 
-    /// <summary>
-    /// Переводит скорость (м/с) в PWM [-100..100] с учётом мёртвой зоны.
-    /// </summary>
     float SpeedToPwm(float speed)
     {
-        float rawPwm = speed * velocityToPwm;  // масштаб м/с → PWM
+        float rawPwm = (speed / maxLinearCmd) * 100f; // нормируем к [-100..100]
+        if (Mathf.Abs(rawPwm) < motorDeadzone) return 0f;
 
-        if (Mathf.Abs(rawPwm) < motorDeadzone)
-            return 0f;  // мёртвая зона — мотор стоит
-
-        // Применяем минимальный стартовый порог
         float sign = Mathf.Sign(rawPwm);
-        float pwm  = Mathf.Abs(rawPwm);
-        pwm = Mathf.Max(pwm, minMotorPwm);
-        pwm = Mathf.Min(pwm, 100f);
-
+        float pwm = Mathf.Clamp(Mathf.Abs(rawPwm), minMotorPwm, 100f);
         return sign * pwm;
     }
 
-    /// <summary>
-    /// Переводит PWM обратно в нормализованную скорость [-1..1].
-    /// </summary>
     float PwmToSpeed(float pwm)
     {
-        if (Mathf.Abs(pwm) < motorDeadzone)
-            return 0f;
-
+        if (Mathf.Abs(pwm) < motorDeadzone) return 0f;
         return pwm / 100f;
     }
 
-    /// <summary>
-    /// Плавный шаг от current к target с ограничением maxStep.
-    /// </summary>
     float StepToward(float current, float target, float maxStep)
     {
         float delta = target - current;
-        if (Mathf.Abs(delta) <= maxStep)
-            return target;
+        if (Mathf.Abs(delta) <= maxStep) return target;
         return current + Mathf.Sign(delta) * maxStep;
     }
 
-    // Отладочный Gizmo — направление движения
     void OnDrawGizmos()
     {
         Gizmos.color = Color.cyan;
         Gizmos.DrawRay(transform.position, transform.forward * 0.5f);
+
+        if (leftTrackPoint != null && rightTrackPoint != null)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawLine(leftTrackPoint.position, rightTrackPoint.position);
+        }
     }
 }

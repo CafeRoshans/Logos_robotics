@@ -9,8 +9,12 @@ using UnityEngine.InputSystem;
 /// Настройки Behavior Parameters (задаются в инспекторе):
 ///   Vector Observation Space Size = 15
 ///   Stacked Vectors               = 4
-///   Continuous Actions            = 3   (linear, angular, camera_servo)
+///   Continuous Actions            = 3   (leftTrack, rightTrack, camera_servo)
 ///   Discrete Branches             = 1, размер ветки = 3  (0 = idle, 1 = grab, 2 = release)
+///
+/// Важно: на TrackController, которым управляет этот агент, useManualInput должен
+/// быть выключен (false) — иначе клавиатура (если Behavior Type != Heuristic и кто-то
+/// жмёт клавиши) будет затирать команды, приходящие из OnActionReceived.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class RobotBrain : Agent
@@ -69,8 +73,8 @@ public class RobotBrain : Agent
 
     private float _cameraServoAngle       = 0f;
     private float _prevDistanceToBall     = -1f;
-    private float _prevGas                = 0f;
-    private float _prevSteer              = 0f;
+    private float _prevLeft               = 0f;
+    private float _prevRight              = 0f;
     private float _timeSinceLastDetection = 0f;
     private float _lastKnownBallDirection = 0f;
     private int   _episodeStepCount       = 0;
@@ -94,8 +98,7 @@ public class RobotBrain : Agent
         }
         if (tracks != null)
         {
-            tracks.gas   = 0f;
-            tracks.steer = 0f;
+            tracks.SetTrackInputs(0f, 0f);
         }
 
         // Мяч — обязательно отпустить, если был в клешне, ДО возвращения позиции
@@ -120,8 +123,8 @@ public class RobotBrain : Agent
 
         // Служебные переменные наград
         _prevDistanceToBall     = DistanceToBall();
-        _prevGas                = 0f;
-        _prevSteer              = 0f;
+        _prevLeft                = 0f;
+        _prevRight               = 0f;
         _timeSinceLastDetection = 0f;
         _lastKnownBallDirection = 0f;
         _episodeStepCount       = 0;
@@ -183,16 +186,17 @@ public class RobotBrain : Agent
             return;
         }
 
-        float gas       = Mathf.Clamp(actions.ContinuousActions[0], -1f, 1f);
-        float steer     = Mathf.Clamp(actions.ContinuousActions[1], -1f, 1f);
-        float camSignal = Mathf.Clamp(actions.ContinuousActions[2], -1f, 1f);
-        int   gripAct   = actions.DiscreteActions[0]; // 0 = idle, 1 = grab, 2 = release
+        // Теперь сеть напрямую выдаёт скорость каждой гусеницы — так же, как их
+        // задавала бы клавиатура через TrackController.SetTrackInputs().
+        float leftTrack  = Mathf.Clamp(actions.ContinuousActions[0], -1f, 1f);
+        float rightTrack = Mathf.Clamp(actions.ContinuousActions[1], -1f, 1f);
+        float camSignal  = Mathf.Clamp(actions.ContinuousActions[2], -1f, 1f);
+        int   gripAct    = actions.DiscreteActions[0]; // 0 = idle, 1 = grab, 2 = release
 
-        // 1. Движение — прокидываем в TrackController
+        // 1. Движение — прокидываем в TrackController напрямую по двум гусеницам
         if (tracks != null)
         {
-            tracks.gas   = gas;
-            tracks.steer = steer;
+            tracks.SetTrackInputs(leftTrack, rightTrack);
         }
 
         // 2. Сервопривод камеры (интегрируем сигнал в угол)
@@ -222,13 +226,13 @@ public class RobotBrain : Agent
         }
 
         // 5. Награды
-        ComputeRewards(gas, steer);
+        ComputeRewards(leftTrack, rightTrack);
 
-        _prevGas   = gas;
-        _prevSteer = steer;
+        _prevLeft  = leftTrack;
+        _prevRight = rightTrack;
     }
 
-    void ComputeRewards(float gas, float steer)
+    void ComputeRewards(float leftTrack, float rightTrack)
     {
         // а) Сближение с мячом (delta distance)
         float curDist = DistanceToBall();
@@ -241,9 +245,9 @@ public class RobotBrain : Agent
         _prevDistanceToBall = curDist;
 
         // б) Штраф за резкость управления
-        float dGas   = Mathf.Abs(gas   - _prevGas);
-        float dSteer = Mathf.Abs(steer - _prevSteer);
-        AddReward(-(dGas + dSteer) * actionRatePenalty);
+        float dLeft  = Mathf.Abs(leftTrack  - _prevLeft);
+        float dRight = Mathf.Abs(rightTrack - _prevRight);
+        AddReward(-(dLeft + dRight) * actionRatePenalty);
 
         // в) Бонус за центрирование мяча в кадре
         if (yolo != null && yolo.isVisible)
@@ -287,21 +291,23 @@ public class RobotBrain : Agent
         var cont = actionsOut.ContinuousActions;
         var disc = actionsOut.DiscreteActions;
 
-        float v = 0f, h = 0f, c = 0f;
+        float left = 0f, right = 0f, c = 0f;
         int   g = 0;
 
         var kb = Keyboard.current;
         if (kb != null)
         {
-            v = kb.wKey.ReadValue() - kb.sKey.ReadValue();     // gas
-            h = kb.dKey.ReadValue() - kb.aKey.ReadValue();     // steer
-            c = kb.eKey.ReadValue() - kb.qKey.ReadValue();     // сервопривод камеры
+            // Те же клавиши, что и дефолт TrackController: W/S — левая, E/D — правая
+            left  = kb.wKey.ReadValue() - kb.sKey.ReadValue();
+            right = kb.eKey.ReadValue() - kb.dKey.ReadValue();
+            // Камера перенесена на I/K, чтобы не конфликтовать с E/D (правая гусеница)
+            c = kb.iKey.ReadValue() - kb.kKey.ReadValue();
             if      (kb.spaceKey.isPressed) g = 1;             // grab
             else if (kb.xKey.isPressed)     g = 2;             // release
         }
 
-        cont[0] = v;
-        cont[1] = h;
+        cont[0] = left;
+        cont[1] = right;
         cont[2] = c;
         disc[0] = g;
     }
