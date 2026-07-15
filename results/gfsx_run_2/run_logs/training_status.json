@@ -1,0 +1,92 @@
+{
+    "ball_max_distance": {
+        "lesson_num": 0
+    },
+    "episode_length": {
+        "lesson_num": 0
+    },
+    "ball_scale": {
+        "lesson_num": 0
+    },
+    "ball_mass": {
+        "lesson_num": 0
+    },
+    "vision_noise": {
+        "lesson_num": 0
+    },
+    "vision_dropout": {
+        "lesson_num": 0
+    },
+    "GFSX_Brain": {
+        "checkpoints": [
+            {
+                "steps": 499712,
+                "file_path": "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-499712.onnx",
+                "reward": null,
+                "creation_time": 1784042373.389379,
+                "auxillary_file_paths": [
+                    "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-499712.pt"
+                ]
+            },
+            {
+                "steps": 999936,
+                "file_path": "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-999936.onnx",
+                "reward": null,
+                "creation_time": 1784042729.770854,
+                "auxillary_file_paths": [
+                    "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-999936.pt"
+                ]
+            },
+            {
+                "steps": 1499648,
+                "file_path": "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-1499648.onnx",
+                "reward": null,
+                "creation_time": 1784043106.1060312,
+                "auxillary_file_paths": [
+                    "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-1499648.pt"
+                ]
+            },
+            {
+                "steps": 1999872,
+                "file_path": "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-1999872.onnx",
+                "reward": null,
+                "creation_time": 1784043500.919174,
+                "auxillary_file_paths": [
+                    "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-1999872.pt"
+                ]
+            },
+            {
+                "steps": 2499584,
+                "file_path": "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-2499584.onnx",
+                "reward": null,
+                "creation_time": 1784044301.260414,
+                "auxillary_file_paths": [
+                    "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-2499584.pt"
+                ]
+            },
+            {
+                "steps": 2948096,
+                "file_path": "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-2948096.onnx",
+                "reward": null,
+                "creation_time": 1784049137.346286,
+                "auxillary_file_paths": [
+                    "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-2948096.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 2948096,
+            "file_path": "results/gfsx_run_2/GFSX_Brain.onnx",
+            "reward": null,
+            "creation_time": 1784049137.346286,
+            "auxillary_file_paths": [
+                "results/gfsx_run_2/GFSX_Brain/GFSX_Brain-2948096.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.2.2"
+    }
+}

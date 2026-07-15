@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// Контроллер гусеничного робота с дифференциальным приводом.
@@ -40,6 +41,11 @@ public class TrackController : MonoBehaviour
 
     private Rigidbody _rb;
 
+    [Header("Ручной ввод")]
+    [Tooltip("Если true — читает WASD/стрелки с клавиатуры и перезаписывает gas/steer. " +
+             "Выключай, когда роботом управляет RobotBrain (ML-Agents), иначе клавиатура затирает команды сети.")]
+    public bool useManualInput = false;
+
     // Входные команды (задаются извне: вручную или из MLAgents)
     [HideInInspector] public float gas   = 0f;  // [-1..1]
     [HideInInspector] public float steer = 0f;  // [-1..1]
@@ -51,9 +57,19 @@ public class TrackController : MonoBehaviour
 
     void Update()
     {
-        // Ручное управление с клавиатуры (для теста без ML-Agents)
-        gas   = Input.GetAxis("Vertical");
-        steer = Input.GetAxis("Horizontal");
+        if (!useManualInput) return;
+
+        // Ручное управление с клавиатуры (новый Input System, для теста без ML-Agents)
+        var kb = Keyboard.current;
+        if (kb == null) return;
+
+        gas   = kb.wKey.ReadValue() - kb.sKey.ReadValue()   // W вперёд, S назад
+              + kb.upArrowKey.ReadValue() - kb.downArrowKey.ReadValue();
+        steer = kb.dKey.ReadValue() - kb.aKey.ReadValue()   // D вправо, A влево
+              + kb.rightArrowKey.ReadValue() - kb.leftArrowKey.ReadValue();
+
+        gas   = Mathf.Clamp(gas,   -1f, 1f);
+        steer = Mathf.Clamp(steer, -1f, 1f);
     }
 
     void FixedUpdate()
