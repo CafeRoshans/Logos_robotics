@@ -1,0 +1,25 @@
+{
+    "ball_max_distance": {
+        "lesson_num": 0
+    },
+    "episode_length": {
+        "lesson_num": 0
+    },
+    "ball_scale": {
+        "lesson_num": 0
+    },
+    "ball_mass": {
+        "lesson_num": 0
+    },
+    "vision_noise": {
+        "lesson_num": 0
+    },
+    "vision_dropout": {
+        "lesson_num": 0
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.13.0+cpu"
+    }
+}

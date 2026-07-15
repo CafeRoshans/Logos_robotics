@@ -20,7 +20,7 @@ using UnityEngine.InputSystem;
 public class RobotBrain : Agent
 {
     [Header("Компоненты робота")]
-    public TrackController tracks;
+    public Controller tracks;
     public GripperController gripper;
     public VirtualSensors sensors;
     public SimulatedYoloCamera yolo;
@@ -177,7 +177,12 @@ public class RobotBrain : Agent
 
     public override void OnActionReceived(ActionBuffers actions)
     {
-        _episodeStepCount++;
+            float dbgLeft  = actions.ContinuousActions[0];
+            float dbgRight = actions.ContinuousActions[1];
+            float dbgCam   = actions.ContinuousActions[2];
+            //Debug.Log($"[RobotBrain] OnActionReceived: left={dbgLeft:F3} right={dbgRight:F3} cam={dbgCam:F3} step={_episodeStepCount}");
+
+            _episodeStepCount++;
         if (hardEpisodeStepLimit > 0 && _episodeStepCount >= hardEpisodeStepLimit)
         {
             Debug.Log($"[RobotBrain] TIMEOUT эпизода на шаге {_episodeStepCount}. EndEpisode.");

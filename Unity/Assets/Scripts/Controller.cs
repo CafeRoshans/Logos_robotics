@@ -10,7 +10,7 @@ using UnityEngine.InputSystem;
 /// Силы на Rigidbody НЕ прикладываются — движение целиком через MovePosition/MoveRotation.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
-public class TrackController : MonoBehaviour
+public class Controller : MonoBehaviour
 {
     [Header("Клавиши (ручной тест)")]
     public Key leftForwardKey = Key.W;
@@ -28,7 +28,7 @@ public class TrackController : MonoBehaviour
 
     [Tooltip("Реалистичный потолок скорости разворота, град/с. " +
             "Не даёт роботу улетать в нереалистичное вращение даже при ошибке в геометрии.")]
-    public float maxAngularSpeedDeg = 200f; // подбери под реальный робот, если появятся данные
+    public float maxAngularSpeedDeg = 200f;
 
     [Header("Параметры PWM (эмуляция реального мотора)")]
     public float motorDeadzone = 10f;
@@ -41,22 +41,26 @@ public class TrackController : MonoBehaviour
              "Выключай, когда роботом управляет ML-Agents (тогда вызывай SetTrackInputs напрямую).")]
     public bool useManualInput = true;
 
-    // Главный интерфейс: именно эти 2 числа будет подавать нейронка
-    [HideInInspector] public float leftInput = 0f;   // [-1..1]
-    [HideInInspector] public float rightInput = 0f;  // [-1..1]
+    [HideInInspector] public float leftInput = 0f;
+    [HideInInspector] public float rightInput = 0f;
 
     Rigidbody rb;
-    float trackWidth;               // расстояние между гусеницами, считается один раз
+    float trackWidth;
     float currentPwmLeft, currentPwmRight;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        rb.isKinematic = true; // силы не нужны — двигаем вручную
+
+        if (leftTrackPoint == null || rightTrackPoint == null)
+        {
+            Debug.LogError("Controller: leftTrackPoint или rightTrackPoint не назначены в инспекторе!");
+            return;
+        }
 
         trackWidth = Vector3.Distance(leftTrackPoint.localPosition, rightTrackPoint.localPosition);
         if (trackWidth < 0.01f)
-            Debug.LogWarning("TrackController: trackWidth почти 0 — проверь позиции leftTrackPoint/rightTrackPoint, повороты будут неадекватными.");
+            Debug.LogWarning("Controller: trackWidth почти 0 — проверь позиции leftTrackPoint/rightTrackPoint, повороты будут неадекватными.");
     }
 
     public void SetTrackInputs(float left, float right)
@@ -85,32 +89,27 @@ public class TrackController : MonoBehaviour
 
     void FixedUpdate()
     {
-        // 1) Команда скорости гусеницы напрямую из входа
+        if (trackWidth < 0.01f) return; // защита от NaN, если точки не назначены
+
         float leftCmdSpeed = leftInput * maxLinearCmd;
         float rightCmdSpeed = rightInput * maxLinearCmd;
 
-        // 2) Скорость → PWM (мёртвая зона, минимальный порог)
         float targetPwmLeft = SpeedToPwm(leftCmdSpeed);
         float targetPwmRight = SpeedToPwm(rightCmdSpeed);
 
-        // 3) Плавный разгон/торможение PWM
-        currentPwmLeft = StepToward(currentPwmLeft, targetPwmLeft, maxPwmStep);
-        currentPwmRight = StepToward(currentPwmRight, targetPwmRight, maxPwmStep);
+        currentPwmLeft = StepToward(currentPwmLeft, targetPwmLeft, maxPwmStep, minMotorPwm);
+        currentPwmRight = StepToward(currentPwmRight, targetPwmRight, maxPwmStep, minMotorPwm);
 
-        // 4) PWM обратно → реальная скорость каждой гусеницы, м/с
         float effLeft = PwmToSpeed(currentPwmLeft) * maxLinearCmd;
         float effRight = PwmToSpeed(currentPwmRight) * maxLinearCmd;
 
-        // 5) Точная кинематика дифференциального привода на основе реальной колеи
         float linearVelocity = (effLeft + effRight) * 0.5f;
-        float angularVelocityRad = (effRight - effLeft) / trackWidth/100;
+        float angularVelocityRad = (effRight - effLeft) / trackWidth / 100;
         float angularVelocityDeg = angularVelocityRad * Mathf.Rad2Deg;
-        angularVelocityDeg = Mathf.Clamp(angularVelocityDeg, -maxAngularSpeedDeg, maxAngularSpeedDeg); // страховка
+        angularVelocityDeg = Mathf.Clamp(angularVelocityDeg, -maxAngularSpeedDeg, maxAngularSpeedDeg);
 
-        // 6) Применение к Rigidbody без сил
         Vector3 newPos = rb.position + transform.forward * linearVelocity * Time.fixedDeltaTime;
         Quaternion deltaRot = Quaternion.Euler(0f, -angularVelocityDeg * Time.fixedDeltaTime, 0f);
-        // минус — компенсация направления Y-поворота в Unity (см. предыдущий баг с W/E)
 
         rb.MovePosition(newPos);
         rb.MoveRotation(rb.rotation * deltaRot);
@@ -118,7 +117,7 @@ public class TrackController : MonoBehaviour
 
     float SpeedToPwm(float speed)
     {
-        float rawPwm = (speed / maxLinearCmd) * 100f; // нормируем к [-100..100]
+        float rawPwm = (speed / maxLinearCmd) * 100f;
         if (Mathf.Abs(rawPwm) < motorDeadzone) return 0f;
 
         float sign = Mathf.Sign(rawPwm);
@@ -132,10 +131,17 @@ public class TrackController : MonoBehaviour
         return pwm / 100f;
     }
 
-    float StepToward(float current, float target, float maxStep)
+    float StepToward(float current, float target, float maxStep, float minMotorThreshold)
     {
+        bool wasStopped = Mathf.Abs(current) < minMotorThreshold;
+        bool wantsToMove = Mathf.Abs(target) >= minMotorThreshold;
+
+        if (wasStopped && wantsToMove)
+            current = Mathf.Sign(target) * minMotorThreshold;
+
         float delta = target - current;
-        if (Mathf.Abs(delta) <= maxStep) return target;
+        if (Mathf.Abs(delta) <= maxStep)
+            return target;
         return current + Mathf.Sign(delta) * maxStep;
     }
 
