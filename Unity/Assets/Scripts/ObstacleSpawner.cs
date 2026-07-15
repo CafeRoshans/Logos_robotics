@@ -61,28 +61,29 @@ public class ObstacleSpawner : MonoBehaviour
 
         // 3. Взять первые spawnCount из перемешанного массива
         int take = Mathf.Min(spawnCount, n);
-        Transform parent = spawnParent != null ? spawnParent : transform;
 
         for (int i = 0; i < take; i++)
         {
             var pt = candidatePoints[indices[i]];
             if (pt == null) continue;
 
-            // Спавним БЕЗ родителя (в мировых координатах) — так на объект не
-            // наследуется lossyScale арены/пола (иначе блок стал бы плоским,
-            // если пол растянут по Y ~ 0.1).
-            var obj = Instantiate(obstaclePrefab, pt.position, pt.rotation);
+            // Валидация точки — если Transform каким-то образом получил NaN/Inf,
+            // не спавним в эту позицию (иначе Rigidbody вылетит в бесконечность).
+            Vector3 p = pt.position;
+            if (float.IsNaN(p.x) || float.IsInfinity(p.x) ||
+                float.IsNaN(p.y) || float.IsInfinity(p.y) ||
+                float.IsNaN(p.z) || float.IsInfinity(p.z))
+            {
+                Debug.LogWarning($"[ObstacleSpawner] Точка '{pt.name}' имеет невалидную позицию: {p}");
+                continue;
+            }
 
-            // Прикрепляем к родителю с сохранением мировой позиции И компенсируем
-            // масштаб родителя, чтобы мировые размеры блока = prefab.localScale.
-            obj.transform.SetParent(parent, worldPositionStays: true);
-            Vector3 ls = obstaclePrefab.transform.localScale;
-            Vector3 pScale = parent.lossyScale;
-            obj.transform.localScale = new Vector3(
-                ls.x / Mathf.Max(0.0001f, pScale.x),
-                ls.y / Mathf.Max(0.0001f, pScale.y),
-                ls.z / Mathf.Max(0.0001f, pScale.z));
-
+            // Спавним в мировых координатах БЕЗ родителя. Так на блок не
+            // наследуется никакой lossyScale от арены — размеры блока всегда
+            // такие, как в префабе. Раньше компенсировали scale формулой,
+            // но при экстремальных значениях (< 0.001 или отрицательных)
+            // это давало бесконечные scale и NaN в физике.
+            var obj = Instantiate(obstaclePrefab, p, pt.rotation);
             _current.Add(obj);
         }
 

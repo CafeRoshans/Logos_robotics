@@ -86,8 +86,12 @@ editor: check-env
 	@cd $(PROJECT) && $(MLAGENTS) $(CONFIG) --run-id=$(RUN_ID) $(EXTRA)
 
 # ---------- tensorboard ----------
+# Открыв TB, вставь этот regex в "Filter tags (regex)" наверху, чтобы скрыть шум:
+#   ^Environment/(Cumulative Reward|Episode Length)$|^Policy/(Entropy|Learning Rate)$|^Losses/|^Custom/
 tensorboard: check-env
 	@echo "→ http://localhost:6006"
+	@echo "→ Фильтр тегов в TB (paste в поле сверху):"
+	@echo '   ^Environment/(Cumulative Reward|Episode Length)$$|^Policy/(Entropy|Learning Rate)$$|^Losses/|^Custom/'
 	@cd $(PROJECT) && $(TENSORBOARD) --logdir=results
 
 # ---------- утилиты ----------

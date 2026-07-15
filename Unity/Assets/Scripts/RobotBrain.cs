@@ -47,17 +47,17 @@ public class RobotBrain : Agent
 
     [Header("Награды и штрафы")]
     [Tooltip("Множитель награды за сближение с мячом (Δd, м). " +
-             "Осторожно: за 500 шагов эпизода может накопить distanceRewardScale × closeDistanceBonusMul × 250. " +
-             "Держи в районе 0.1-0.3, иначе Mean Reward уйдёт в сотни.")]
-    public float distanceRewardScale   = 0.2f;
+             "0.05 = за подъезд на 1 м агент получает +0.05. За эпизод 500 шагов " +
+             "суммарный вклад distance-reward < ±3, что не забивает +5 за успешный захват.")]
+    public float distanceRewardScale   = 0.05f;
     [Tooltip("Порог 'близко' — ниже него награда за сближение усиливается")]
     public float closeDistanceThreshold = 0.5f;
     [Tooltip("Множитель усиления награды за сближение вблизи мяча")]
     public float closeDistanceBonusMul  = 1.5f;
     [Tooltip("Штраф за резкое изменение управляющих сигналов между шагами")]
-    public float actionRatePenalty      = 0.001f;
-    [Tooltip("Штраф за критически близкую стену (по ИК/УЗ)")]
-    public float wallProximityPenalty   = 0.02f;
+    public float actionRatePenalty      = 0.0005f;
+    [Tooltip("Штраф за критически близкую стену (по ИК/УЗ). За 500 шагов у стены = -1 к эпизоду.")]
+    public float wallProximityPenalty   = 0.002f;
     [Tooltip("Бонус за то, что мяч в центре кадра")]
     public float centeringBonus         = 0.005f;
     [Tooltip("Терминальный бонус за успешный захват мяча")]
@@ -96,6 +96,17 @@ public class RobotBrain : Agent
     private float _lastKnownBallDirection = 0f;
     private int   _episodeStepCount       = 0;
 
+    // --- Кастомные метрики за эпизод ---
+    private float _rewardDistance = 0f;
+    private float _rewardWall     = 0f;
+    private float _rewardCenter   = 0f;
+    private float _rewardAction   = 0f;
+    private float _rewardStep     = 0f;
+    private float _rewardTerminal = 0f;
+    private int   _framesBallVisible = 0;
+    private int   _framesTotal       = 0;
+    private float _speedAccum        = 0f;
+
     public override void Initialize()
     {
         _rb = GetComponent<Rigidbody>();
@@ -126,7 +137,9 @@ public class RobotBrain : Agent
 
             // Робот — случайная свободная точка
             int robotIdx = Random.Range(0, pts.Count);
-            robotPos = pts[robotIdx].position;
+            Vector3 candRobotPos = pts[robotIdx].position;
+            if (IsValid(candRobotPos)) robotPos = candRobotPos;
+            else Debug.LogWarning($"[RobotBrain] Точка '{pts[robotIdx].name}' даёт невалидную позицию {candRobotPos}, использую _startPosition.");
 
             // Мяч — другая точка, с проверкой минимального расстояния до робота.
             // Даём до 20 попыток, потом берём просто «не такую же».
@@ -135,16 +148,25 @@ public class RobotBrain : Agent
             {
                 int cand = Random.Range(0, pts.Count);
                 if (cand == robotIdx) continue;
-                if (Vector3.Distance(pts[cand].position, robotPos) < minRobotBallDistance) continue;
+                Vector3 cp = pts[cand].position;
+                if (!IsValid(cp)) continue;
+                if (Vector3.Distance(cp, robotPos) < minRobotBallDistance) continue;
                 ballIdx = cand;
                 break;
             }
-            if (ballIdx < 0) ballIdx = (robotIdx + 1) % pts.Count;
-            ballPos = pts[ballIdx].position;
+            if (ballIdx >= 0)
+            {
+                Vector3 candBallPos = pts[ballIdx].position;
+                if (IsValid(candBallPos)) ballPos = candBallPos;
+            }
 
             if (randomizeRobotHeading)
                 robotRot = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
         }
+
+        // Финальная проверка — если что-то дало NaN, используем безопасные значения
+        if (!IsValid(robotPos)) robotPos = _startPosition;
+        if (!IsValid(ballPos))  ballPos  = _ballStartPosition;
 
         // 4. Ставим робота
         transform.SetPositionAndRotation(robotPos, robotRot);
@@ -179,6 +201,17 @@ public class RobotBrain : Agent
         _timeSinceLastDetection = 0f;
         _lastKnownBallDirection = 0f;
         _episodeStepCount       = 0;
+
+        // Сброс кастомных счётчиков
+        _rewardDistance = 0f;
+        _rewardWall     = 0f;
+        _rewardCenter   = 0f;
+        _rewardAction   = 0f;
+        _rewardStep     = 0f;
+        _rewardTerminal = 0f;
+        _framesBallVisible = 0;
+        _framesTotal       = 0;
+        _speedAccum        = 0f;
     }
 
     public override void CollectObservations(VectorSensor sensor)
@@ -236,8 +269,9 @@ public class RobotBrain : Agent
             _episodeStepCount++;
         if (hardEpisodeStepLimit > 0 && _episodeStepCount >= hardEpisodeStepLimit)
         {
-            Debug.Log($"[RobotBrain] TIMEOUT эпизода на шаге {_episodeStepCount}. EndEpisode.");
             AddReward(timeoutPenalty);
+            _rewardTerminal += timeoutPenalty;
+            LogEpisodeStats(success: false);
             EndEpisode();
             return;
         }
@@ -290,7 +324,11 @@ public class RobotBrain : Agent
 
     void ComputeRewards(float leftTrack, float rightTrack)
     {
-        float rewardBefore = GetCumulativeReward();
+        // Кадровые счётчики для метрик
+        _framesTotal++;
+        bool ballVisible = yolo != null && yolo.isVisible;
+        if (ballVisible) _framesBallVisible++;
+        if (_rb != null) _speedAccum += _rb.linearVelocity.magnitude;
 
         // а) Сближение с мячом (delta distance)
         float curDist = DistanceToBall();
@@ -300,56 +338,48 @@ public class RobotBrain : Agent
             delta = Mathf.Clamp(delta, -0.5f, 0.5f);
             float mul   = (curDist < closeDistanceThreshold) ? closeDistanceBonusMul : 1f;
             float rDist = delta * distanceRewardScale * mul;
-            AddReward(rDist);
-
-            // Диагностика: если distance-reward за шаг > 1, что-то не так
-            if (Mathf.Abs(rDist) > 1f)
-                Debug.LogWarning($"[RobotBrain] Странный distance-reward={rDist:F2} " +
-                                 $"(delta={delta:F2}, curDist={curDist:F2}, prevDist={_prevDistanceToBall:F2})");
+            AddReward(rDist); _rewardDistance += rDist;
         }
         _prevDistanceToBall = curDist;
 
         // б) Штраф за резкость управления
         float dLeft  = Mathf.Abs(leftTrack  - _prevLeft);
         float dRight = Mathf.Abs(rightTrack - _prevRight);
-        AddReward(-(dLeft + dRight) * actionRatePenalty);
+        float rAct = -(dLeft + dRight) * actionRatePenalty;
+        AddReward(rAct); _rewardAction += rAct;
 
         // в) Бонус за центрирование мяча в кадре
-        if (yolo != null && yolo.isVisible)
+        if (ballVisible)
         {
-            float centered = 1f - Mathf.Abs(yolo.horizontalAngle); // 1 в центре, 0 на краю
-            AddReward(centered * centeringBonus);
+            float centered = 1f - Mathf.Abs(yolo.horizontalAngle);
+            float rCen = centered * centeringBonus;
+            AddReward(rCen); _rewardCenter += rCen;
         }
 
         // г) Штраф за критически близкие стены
         if (sensors != null)
         {
-            if (sensors.ultrasonicNormalized < 0.15f) AddReward(-wallProximityPenalty);
-            if (sensors.leftIR  == 1)                 AddReward(-wallProximityPenalty);
-            if (sensors.rightIR == 1)                 AddReward(-wallProximityPenalty);
+            float rWall = 0f;
+            if (sensors.ultrasonicNormalized < 0.15f) rWall -= wallProximityPenalty;
+            if (sensors.leftIR  == 1)                 rWall -= wallProximityPenalty;
+            if (sensors.rightIR == 1)                 rWall -= wallProximityPenalty;
+            if (rWall != 0f) { AddReward(rWall); _rewardWall += rWall; }
         }
 
-        // д) Мелкий постоянный штраф — не стоять
-        AddReward(perStepPenalty);
-
-        // Диагностика: аномалия суммарного вклада за шаг
-        float stepDelta = GetCumulativeReward() - rewardBefore;
-        if (Mathf.Abs(stepDelta) > 3f)
-            Debug.LogWarning($"[RobotBrain] Аномальный вклад за шаг = {stepDelta:F2}. " +
-                             $"Cumul={GetCumulativeReward():F2}, gripperIsHolding={(gripper != null && gripper.isHolding)}");
+        // д) Мелкий постоянный штраф
+        AddReward(perStepPenalty); _rewardStep += perStepPenalty;
 
         // е) Терминал: успешный захват
         if (gripper != null && gripper.isHolding)
         {
             AddReward(grabSuccessReward);
+            _rewardTerminal += grabSuccessReward;
+            LogEpisodeStats(success: true);
             EndEpisode();
             return;
         }
 
-        // ж) Терминал: вылет за арену.
-        // Границы отсчитываются от стартовой позиции + локальный offset арены,
-        // а не от глобального (0,0,0) — иначе робот, спавнящийся не в нуле,
-        // сразу считается вылетевшим.
+        // ж) Терминал: вылет за арену
         Vector3 arenaCenter = _startPosition + arenaCenterOffset;
         Vector3 p = transform.position - arenaCenter;
         if (Mathf.Abs(p.x) > arenaHalfSize.x ||
@@ -357,8 +387,46 @@ public class RobotBrain : Agent
             p.y < -arenaHalfSize.y || p.y > arenaHalfSize.y)
         {
             AddReward(outOfArenaPenalty);
+            _rewardTerminal += outOfArenaPenalty;
+            LogEpisodeStats(success: false);
             EndEpisode();
         }
+    }
+
+    /// <summary>
+    /// Логирует пер-эпизодные кастомные метрики в Custom/... секцию TensorBoard.
+    /// Вызывается перед EndEpisode(). Таймаут-терминал логирует отдельно из OnActionReceived.
+    /// </summary>
+    void LogEpisodeStats(bool success)
+    {
+        var s = Academy.Instance.StatsRecorder;
+
+        // Успех эпизода — усредняется во время summary, даёт success rate ∈ [0..1]
+        s.Add("Custom/SuccessRate", success ? 1f : 0f);
+
+        // Разбивка накопленной награды за эпизод
+        s.Add("Custom/Reward/Distance", _rewardDistance);
+        s.Add("Custom/Reward/Wall",     _rewardWall);
+        s.Add("Custom/Reward/Center",   _rewardCenter);
+        s.Add("Custom/Reward/Action",   _rewardAction);
+        s.Add("Custom/Reward/Step",     _rewardStep);
+        s.Add("Custom/Reward/Terminal", _rewardTerminal);
+
+        // Доля кадров, когда робот видит мяч (за эпизод)
+        if (_framesTotal > 0)
+            s.Add("Custom/BallVisibleFraction", (float)_framesBallVisible / _framesTotal);
+
+        // Средняя скорость робота за эпизод
+        if (_framesTotal > 0)
+            s.Add("Custom/AvgSpeed", _speedAccum / _framesTotal);
+
+        // Heat map: позиция робота относительно центра арены
+        // (TensorBoard SCALARS усредняет — при наличии 15 арен по разным X/Z
+        // получим примерное распределение. Полноценный heatmap рисуется
+        // внешне из этих же данных, но уже это даёт представление.)
+        Vector3 rel = transform.position - (_startPosition + arenaCenterOffset);
+        s.Add("Custom/Position/RelX", rel.x);
+        s.Add("Custom/Position/RelZ", rel.z);
     }
 
     public override void Heuristic(in ActionBuffers actionsOut)
@@ -391,6 +459,13 @@ public class RobotBrain : Agent
     {
         if (targetBall == null) return -1f;
         return Vector3.Distance(transform.position, targetBall.position);
+    }
+
+    static bool IsValid(Vector3 v)
+    {
+        return !(float.IsNaN(v.x) || float.IsInfinity(v.x) ||
+                 float.IsNaN(v.y) || float.IsInfinity(v.y) ||
+                 float.IsNaN(v.z) || float.IsInfinity(v.z));
     }
 
     void OnDrawGizmosSelected()

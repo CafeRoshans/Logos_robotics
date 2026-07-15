@@ -40,6 +40,8 @@ public class GripperController : MonoBehaviour
     private Transform heldOriginalParent;
     private bool      heldOriginalKinematic;
     private bool      heldOriginalColliderEnabled;
+    private Vector3   heldOriginalLocalScale;
+    private Vector3   heldOriginalWorldPosition;
 
     void Update()
     {
@@ -105,12 +107,19 @@ public class GripperController : MonoBehaviour
             return;
         }
 
-        // Сохраняем исходное состояние — чтобы корректно восстановить при отпускании
+        // Сохраняем исходное состояние — чтобы корректно восстановить при отпускании.
+        // ВАЖНО: сохраняем и localScale, потому что после SetParent(holdPoint, false)
+        // мировой scale мяча становится = 1 × holdPoint.lossyScale.
+        // Если у клешни/арены в цепочке родителей есть нестандартный scale,
+        // мяч приобретает странный размер, а после Release он "запомнится" физикой
+        // и выдаст NaN в distanceForSort/AABB.
         heldRb                       = rb;
         heldCollider                 = col;
         heldOriginalParent           = ball.transform.parent;
         heldOriginalKinematic        = rb.isKinematic;
         heldOriginalColliderEnabled  = col != null ? col.enabled : true;
+        heldOriginalLocalScale       = ball.transform.localScale;
+        heldOriginalWorldPosition    = ball.transform.position;
 
         // Останавливаем физику
         rb.linearVelocity  = Vector3.zero;
@@ -119,7 +128,9 @@ public class GripperController : MonoBehaviour
 
         if (col != null) col.enabled = false;
 
-        // Крепим к HoldPoint
+        // Крепим к HoldPoint. worldPositionStays=false: мяч теряет свои world-координаты
+        // и позиционируется по HoldPoint. localScale ставим (1,1,1), потом мы всё равно
+        // восстановим оригинал при Release.
         ball.transform.SetParent(holdPoint, worldPositionStays: false);
         ball.transform.localPosition = Vector3.zero;
         ball.transform.localRotation = Quaternion.identity;
@@ -140,16 +151,33 @@ public class GripperController : MonoBehaviour
 
         Transform ballT = heldRb.transform;
 
-        // Отвязываем от клешни — важно ДО включения физики,
-        // чтобы не унаследовать движение родителя как трансформ.
-        ballT.SetParent(heldOriginalParent, worldPositionStays: true);
+        // 1. Отвязываем от клешни. worldPositionStays=false — не сохраняем
+        //    мировой transform, потому что он мог получить кривой scale от иерархии клешни.
+        //    Восстановим руками ниже.
+        ballT.SetParent(heldOriginalParent, worldPositionStays: false);
 
+        // 2. Восстанавливаем оригинальный localScale — ключевой момент,
+        //    без него мяч может остаться с scale = 0 или огромным,
+        //    и физика уронит NaN на всех последующих кадрах.
+        ballT.localScale = heldOriginalLocalScale;
+
+        // 3. Ставим мировую позицию туда, где мяч был до захвата (или где сейчас HoldPoint —
+        //    но безопаснее сначала положить в исходную точку, потом RobotBrain сам его
+        //    переставит через targetBall.position = ballPos).
+        ballT.position = heldOriginalWorldPosition;
+        ballT.rotation = Quaternion.identity;
+
+        // 4. Возвращаем коллайдер и кинематику
         if (heldCollider != null) heldCollider.enabled = heldOriginalColliderEnabled;
         heldRb.isKinematic = heldOriginalKinematic;
 
-        // Обнуляем скорости — мяч ляжет, а не улетит.
-        heldRb.linearVelocity  = Vector3.zero;
-        heldRb.angularVelocity = Vector3.zero;
+        // 5. Обнуляем скорости — мяч ляжет, а не улетит.
+        //    (Только если Rigidbody не остался kinematic, иначе Unity ругнётся.)
+        if (!heldRb.isKinematic)
+        {
+            heldRb.linearVelocity  = Vector3.zero;
+            heldRb.angularVelocity = Vector3.zero;
+        }
 
         heldRb       = null;
         heldCollider = null;
