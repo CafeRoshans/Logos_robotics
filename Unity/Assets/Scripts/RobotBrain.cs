@@ -28,6 +28,9 @@ public class RobotBrain : Agent
     public Transform cameraServo;
     [Tooltip("Мяч, за которым робот охотится")]
     public Transform targetBall;
+    [Tooltip("Спавнер препятствий на этой арене. Если задан — на каждый OnEpisodeBegin " +
+             "будет вызван Respawn() и препятствия перераскладываются случайно.")]
+    public ObstacleSpawner obstacleSpawner;
 
     [Header("Сервопривод камеры")]
     [Tooltip("Максимальный угол отклонения камеры ± (градусы)")]
@@ -43,12 +46,14 @@ public class RobotBrain : Agent
     public Vector3 arenaHalfSize = new Vector3(2f, 1f, 2f);
 
     [Header("Награды и штрафы")]
-    [Tooltip("Множитель награды за сближение с мячом (Δd, м)")]
-    public float distanceRewardScale   = 1.0f;
+    [Tooltip("Множитель награды за сближение с мячом (Δd, м). " +
+             "Осторожно: за 500 шагов эпизода может накопить distanceRewardScale × closeDistanceBonusMul × 250. " +
+             "Держи в районе 0.1-0.3, иначе Mean Reward уйдёт в сотни.")]
+    public float distanceRewardScale   = 0.2f;
     [Tooltip("Порог 'близко' — ниже него награда за сближение усиливается")]
     public float closeDistanceThreshold = 0.5f;
     [Tooltip("Множитель усиления награды за сближение вблизи мяча")]
-    public float closeDistanceBonusMul  = 3.0f;
+    public float closeDistanceBonusMul  = 1.5f;
     [Tooltip("Штраф за резкое изменение управляющих сигналов между шагами")]
     public float actionRatePenalty      = 0.001f;
     [Tooltip("Штраф за критически близкую стену (по ИК/УЗ)")]
@@ -61,6 +66,15 @@ public class RobotBrain : Agent
     public float outOfArenaPenalty      = -2.0f;
     [Tooltip("Небольшой штраф за каждый шаг — стимулирует скорость решения")]
     public float perStepPenalty         = -0.0005f;
+
+    [Header("Случайный спавн робота и мяча")]
+    [Tooltip("Спавнить робота и мяч в случайных точках из obstacleSpawner.unusedPoints при каждом эпизоде")]
+    public bool randomizeSpawnPositions = true;
+    [Tooltip("Минимальное расстояние между роботом и мячом при спавне (м). " +
+             "Ставь >= размера мяча + захвата, чтобы робот не заспавнился на мяче.")]
+    public float minRobotBallDistance = 0.6f;
+    [Tooltip("Рандомизировать поворот робота при спавне (0..360°)")]
+    public bool randomizeRobotHeading = true;
 
     [Header("Страховка на случай, если Max Step в инспекторе Agent не спасает")]
     [Tooltip("Жёсткий лимит на количество вызовов OnActionReceived за эпизод. 0 = выключено.")]
@@ -92,27 +106,61 @@ public class RobotBrain : Agent
 
     public override void OnEpisodeBegin()
     {
-        // Робот
-        transform.SetPositionAndRotation(_startPosition, _startRotation);
-        if (_rb != null)
+        // 1. Препятствия перераскладываем ПЕРВЫМИ — они определяют свободные точки
+        //    для случайного спавна робота и мяча.
+        if (obstacleSpawner != null) obstacleSpawner.Respawn();
+
+        // 2. Разжимаем клешню (если был мяч) — до перемещения позиций
+        if (gripper != null && gripper.isHolding) gripper.Release();
+        if (gripper != null) gripper.grabCommand = false;
+
+        // 3. Определяем позиции робота и мяча
+        Vector3 robotPos = _startPosition;
+        Quaternion robotRot = _startRotation;
+        Vector3 ballPos = _ballStartPosition;
+
+        if (randomizeSpawnPositions && obstacleSpawner != null
+            && obstacleSpawner.unusedPoints.Count >= 2)
+        {
+            var pts = obstacleSpawner.unusedPoints;
+
+            // Робот — случайная свободная точка
+            int robotIdx = Random.Range(0, pts.Count);
+            robotPos = pts[robotIdx].position;
+
+            // Мяч — другая точка, с проверкой минимального расстояния до робота.
+            // Даём до 20 попыток, потом берём просто «не такую же».
+            int ballIdx = -1;
+            for (int tries = 0; tries < 20; tries++)
+            {
+                int cand = Random.Range(0, pts.Count);
+                if (cand == robotIdx) continue;
+                if (Vector3.Distance(pts[cand].position, robotPos) < minRobotBallDistance) continue;
+                ballIdx = cand;
+                break;
+            }
+            if (ballIdx < 0) ballIdx = (robotIdx + 1) % pts.Count;
+            ballPos = pts[ballIdx].position;
+
+            if (randomizeRobotHeading)
+                robotRot = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+        }
+
+        // 4. Ставим робота
+        transform.SetPositionAndRotation(robotPos, robotRot);
+        if (_rb != null && !_rb.isKinematic)
         {
             _rb.linearVelocity  = Vector3.zero;
             _rb.angularVelocity = Vector3.zero;
         }
-        if (tracks != null)
-        {
-            tracks.SetTrackInputs(0f, 0f);
-        }
+        if (tracks != null) tracks.SetTrackInputs(0f, 0f);
 
-        // Мяч — обязательно отпустить, если был в клешне, ДО возвращения позиции
-        if (gripper != null && gripper.isHolding) gripper.Release();
-        if (gripper != null) gripper.grabCommand = false;
-
+        // 5. Ставим мяч
         if (targetBall != null)
         {
-            targetBall.position = _ballStartPosition;
+            targetBall.position = ballPos;
             var brb = targetBall.GetComponent<Rigidbody>();
-            if (brb != null)
+            if (brb != null && !brb.isKinematic)
             {
                 brb.linearVelocity  = Vector3.zero;
                 brb.angularVelocity = Vector3.zero;
@@ -242,13 +290,22 @@ public class RobotBrain : Agent
 
     void ComputeRewards(float leftTrack, float rightTrack)
     {
+        float rewardBefore = GetCumulativeReward();
+
         // а) Сближение с мячом (delta distance)
         float curDist = DistanceToBall();
         if (_prevDistanceToBall > 0f && curDist > 0f)
         {
             float delta = _prevDistanceToBall - curDist; // + = приблизились
+            delta = Mathf.Clamp(delta, -0.5f, 0.5f);
             float mul   = (curDist < closeDistanceThreshold) ? closeDistanceBonusMul : 1f;
-            AddReward(delta * distanceRewardScale * mul);
+            float rDist = delta * distanceRewardScale * mul;
+            AddReward(rDist);
+
+            // Диагностика: если distance-reward за шаг > 1, что-то не так
+            if (Mathf.Abs(rDist) > 1f)
+                Debug.LogWarning($"[RobotBrain] Странный distance-reward={rDist:F2} " +
+                                 $"(delta={delta:F2}, curDist={curDist:F2}, prevDist={_prevDistanceToBall:F2})");
         }
         _prevDistanceToBall = curDist;
 
@@ -274,6 +331,12 @@ public class RobotBrain : Agent
 
         // д) Мелкий постоянный штраф — не стоять
         AddReward(perStepPenalty);
+
+        // Диагностика: аномалия суммарного вклада за шаг
+        float stepDelta = GetCumulativeReward() - rewardBefore;
+        if (Mathf.Abs(stepDelta) > 3f)
+            Debug.LogWarning($"[RobotBrain] Аномальный вклад за шаг = {stepDelta:F2}. " +
+                             $"Cumul={GetCumulativeReward():F2}, gripperIsHolding={(gripper != null && gripper.isHolding)}");
 
         // е) Терминал: успешный захват
         if (gripper != null && gripper.isHolding)
