@@ -27,7 +27,7 @@ TENSORBOARD   := $(CONDA_ENV)/bin/tensorboard
 
 # ---------- параметры запуска ----------
 RUN_ID   ?= gfsx_$(shell date +%Y%m%d_%H%M%S)
-NUM_ENVS ?= 4
+NUM_ENVS ?= 1
 EXTRA    ?=
 
 # ==============================================================================

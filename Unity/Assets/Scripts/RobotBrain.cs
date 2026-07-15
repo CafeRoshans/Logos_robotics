@@ -36,7 +36,10 @@ public class RobotBrain : Agent
     public float cameraServoSpeedDegPerSec = 90f;
 
     [Header("Границы арены (терминал 'вылетел')")]
-    public Vector3 arenaCenter = Vector3.zero;
+    [Tooltip("Смещение центра арены ОТ стартовой позиции робота, в локальных единицах. " +
+             "Обычно (0,0,0), если робот стартует по центру арены. Так mult-arena работает автоматически.")]
+    public Vector3 arenaCenterOffset = Vector3.zero;
+    [Tooltip("Половина размера арены (м). Робот считается вылетевшим, если ушёл дальше.")]
     public Vector3 arenaHalfSize = new Vector3(2f, 1f, 2f);
 
     [Header("Награды и штрафы")]
@@ -280,7 +283,11 @@ public class RobotBrain : Agent
             return;
         }
 
-        // ж) Терминал: вылет за арену
+        // ж) Терминал: вылет за арену.
+        // Границы отсчитываются от стартовой позиции + локальный offset арены,
+        // а не от глобального (0,0,0) — иначе робот, спавнящийся не в нуле,
+        // сразу считается вылетевшим.
+        Vector3 arenaCenter = _startPosition + arenaCenterOffset;
         Vector3 p = transform.position - arenaCenter;
         if (Mathf.Abs(p.x) > arenaHalfSize.x ||
             Mathf.Abs(p.z) > arenaHalfSize.z ||
@@ -325,7 +332,12 @@ public class RobotBrain : Agent
 
     void OnDrawGizmosSelected()
     {
+        // Рисуем реальные границы арены — относительно текущего положения робота
+        // (в редакторе _startPosition ещё не задан, поэтому берём transform.position).
+        Vector3 center = Application.isPlaying
+            ? (_startPosition + arenaCenterOffset)
+            : (transform.position + arenaCenterOffset);
         Gizmos.color = Color.magenta;
-        Gizmos.DrawWireCube(arenaCenter, arenaHalfSize * 2f);
+        Gizmos.DrawWireCube(center, arenaHalfSize * 2f);
     }
 }
