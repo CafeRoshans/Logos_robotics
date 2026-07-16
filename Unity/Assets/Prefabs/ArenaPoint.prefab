@@ -313,7 +313,6 @@ Transform:
   m_LocalScale: {x: 3.15, y: 0.001, z: 6.6}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 8241738443425347208}
   - {fileID: 8223976696121323457}
   - {fileID: 7309747341095048178}
   - {fileID: 8267818028514828567}
@@ -926,6 +925,68 @@ Transform:
   m_Children: []
   m_Father: {fileID: 6326840295651880450}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &4362021053264351024
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4519345374274968212}
+  m_Layer: 0
+  m_Name: BallSpawnPoint2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4519345374274968212
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4362021053264351024}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.334, y: 10.0235, z: -1.426}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8835198178993767469}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &4485739793180320692
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4872751535100657784}
+  m_Layer: 0
+  m_Name: BallSpawnPoint4
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4872751535100657784
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4485739793180320692}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.075, y: 10.0235, z: -0.626}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8835198178993767469}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &4688175601324132240
 GameObject:
   m_ObjectHideFlags: 0
@@ -1160,7 +1221,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8241738443425347208}
   m_Layer: 0
-  m_Name: BallSpawnPoint
+  m_Name: BallSpawnPoint1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1175,11 +1236,11 @@ Transform:
   m_GameObject: {fileID: 5088730185538885806}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.29099992, y: 24.001118, z: 0.4105}
-  m_LocalScale: {x: 0.3174603, y: 999.9999, z: 0.15151516}
+  m_LocalPosition: {x: -1.2515798, y: 10.0235, z: 0.8569299}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 6326840295651880450}
+  m_Father: {fileID: 8835198178993767469}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &5089989243390918077
 GameObject:
@@ -1210,11 +1271,46 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 8241738443425347208}
+  - {fileID: 4519345374274968212}
+  - {fileID: 6016700507148416519}
+  - {fileID: 4872751535100657784}
   - {fileID: 6326840295651880450}
   - {fileID: 2662588395027316777}
   - {fileID: 6971614648529262260}
   - {fileID: 4212372868037608869}
   m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &5239152659547572701
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6016700507148416519}
+  m_Layer: 0
+  m_Name: BallSpawnPoint3
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6016700507148416519
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5239152659547572701}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.338, y: 10.0235, z: -3.402}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8835198178993767469}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &6343270466425812025
 GameObject:
@@ -2214,7 +2310,7 @@ MonoBehaviour:
   agentParameters:
     maxStep: 0
   hasUpgradedFromAgentParameters: 1
-  MaxStep: 2000
+  MaxStep: 3000
   tracks: {fileID: 4508390424881706522}
   gripper: {fileID: 1081570319156500118}
   sensors: {fileID: 434451357782293778}
@@ -2225,12 +2321,12 @@ MonoBehaviour:
   cameraServoMaxAngle: 90
   cameraServoSpeedDegPerSec: 90
   arenaCenterOffset: {x: 0, y: 0, z: 2.9}
-  arenaHalfSize: {x: 1.42, y: 1, z: 3.2}
+  arenaHalfSize: {x: 1.42, y: 1, z: 3.25}
   distanceRewardScale: 1
   closeDistanceThreshold: 0.5
   closeDistanceBonusMul: 3
   actionRatePenalty: 0.001
-  wallProximityPenalty: 0.05
+  wallProximityPenalty: 0.015
   wobbleAsymmetryPenalty: 0.01
   steerFlipPenalty: 0.02
   grabSuccessReward: 5
@@ -2238,15 +2334,19 @@ MonoBehaviour:
   perStepPenalty: 0.001
   backwardMovementPenalty: 0.01
   backwardMovementDeadzone: 0.01
-  centeringBonus: 0.003
-  bodyCameraAlignmentBonus: 0.007
+  centeringBonus: 0.01
+  bodyCameraAlignmentBonus: 0
   bodyCameraAlignmentToleranceDeg: 3
-  falseGrabPenalty: 0.01
+  falseGrabPenalty: 0
   grabProximityIRThreshold: 0.5
   randomizeSpawnPositions: 1
   minRobotBallDistance: 0.6
   randomizeRobotHeading: 1
-  ballSpawnPoint: {fileID: 8241738443425347208}
+  ballSpawnPoints:
+  - {fileID: 8241738443425347208}
+  - {fileID: 4519345374274968212}
+  - {fileID: 6016700507148416519}
+  - {fileID: 4872751535100657784}
   randomizeBallMass: 1
   ballMassMin: 0.01
   ballMassMax: 0.1
@@ -2422,7 +2522,7 @@ BoxCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 0
+  m_Enabled: 1
   serializedVersion: 3
   m_Size: {x: 0.008635822, y: 0.00632296, z: 0.0071913935}
   m_Center: {x: -0.000074291995, y: 0.0010237253, z: -0.0007419946}

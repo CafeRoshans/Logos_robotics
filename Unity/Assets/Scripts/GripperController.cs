@@ -36,6 +36,9 @@ public class GripperController : MonoBehaviour
     [HideInInspector] public bool grabCommand = false;   // внешняя команда: 1 = сжать, 0 = разжать
 
     private Rigidbody heldRb;
+    /// <summary>Публичный доступ к захваченному объекту — RobotBrain использует
+    /// чтобы верифицировать: захвачен ли ИМЕННО его целевой мяч, а не чужой из соседней арены.</summary>
+    public Rigidbody HeldRigidbody => heldRb;
     private Collider  heldCollider;
     private Transform heldOriginalParent;
     private bool      heldOriginalKinematic;

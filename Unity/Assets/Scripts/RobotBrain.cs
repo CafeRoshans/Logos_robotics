@@ -72,8 +72,12 @@ public class RobotBrain : Agent
 
     [Tooltip("Штраф за асимметрию гусениц при движении ВПЕРЁД — нужен чтобы робот не ехал зигзагом. " +
              "Активен только когда обе гусеницы жмут вперёд (иначе повороты бы наказывались). " +
-             "Формула: |leftTrack - rightTrack| × max(0, (leftTrack+rightTrack)/2) × penalty.")]
+             "Формула: max(0, |leftTrack - rightTrack| - deadzone) × max(0, (leftTrack+rightTrack)/2) × penalty.")]
     public float wobbleAsymmetryPenalty = 0.01f;
+    [Tooltip("Толерантность к малой асимметрии — не штрафуем |left-right| < wobbleAsymmetryDeadzone. " +
+             "Нужно чтобы модель могла свободно КОМПЕНСИРОВАТЬ разные leftSpeedMul/rightSpeedMul и ехать прямо " +
+             "без штрафа. Ставь ≈ разброса моторов (0.15 если motorSpeedMul гуляет 0.85..1.15).")]
+    public float wobbleAsymmetryDeadzone = 0.15f;
 
     [Tooltip("Штраф за смену знака поворота между шагами (влево-вправо-влево). " +
              "Реальный робот не может так быстро менять направление вращения. " +
@@ -132,10 +136,11 @@ public class RobotBrain : Agent
     [Tooltip("Рандомизировать поворот робота при спавне (0..360°)")]
     public bool randomizeRobotHeading = true;
 
-    [Header("Спавн мяча — фиксированная точка")]
-    [Tooltip("Если задан — мяч ВСЕГДА ставится в эту точку (например, середина одного бортика арены). " +
-             "Приоритетнее чем случайный спавн. Если null — берётся случайная точка из unusedPoints.")]
-    public Transform ballSpawnPoint;
+    [Header("Спавн мяча — фиксированные точки")]
+    [Tooltip("Массив точек-кандидатов для мяча (например, середины 4 бортиков арены). " +
+             "На каждом эпизоде случайно выбирается ОДНА. Если массив пуст — берётся точка " +
+             "из obstacleSpawner.unusedPoints (старое поведение). Приоритетнее чем unusedPoints.")]
+    public Transform[] ballSpawnPoints;
 
     [Header("Рандомизация массы мяча")]
     [Tooltip("На каждом эпизоде мяч получает случайную массу в этом диапазоне (кг). " +
@@ -247,6 +252,40 @@ public class RobotBrain : Agent
         _prevPosition = _startPosition;
         _lastVelocity = Vector3.zero;
         if (targetBall != null) _ballStartPosition = targetBall.position;
+
+        // Проверка что ссылки идут на объекты внутри той же иерархии верхнего родителя
+        // (т.е. на объекты своей арены, а не на чужие). Если ссылка share'ится между
+        // инстансами префабов — Unity об этом молчит, но обучение будет считать
+        // ложные success rate и общие state. Ловим на этапе Initialize.
+        Transform root = transform.root;
+        void CheckSameArena(Object obj, string label)
+        {
+            if (obj == null) return;
+            Component comp = obj as Component;
+            if (comp == null) return;
+            if (comp.transform.root != root)
+            {
+                Debug.LogError($"[{name}] Поле '{label}' ссылается на объект '{comp.name}' " +
+                               $"ВНЕ этой арены (его root = '{comp.transform.root.name}', мой root = '{root.name}'). " +
+                               $"Это баг мульти-арены — пересобери префаб.", this);
+            }
+        }
+        CheckSameArena(tracks,           "tracks");
+        CheckSameArena(gripper,          "gripper");
+        CheckSameArena(sensors,          "sensors");
+        CheckSameArena(yolo,             "yolo");
+        CheckSameArena(obstacleSpawner,  "obstacleSpawner");
+        if (cameraServo    != null && cameraServo.root    != root) Debug.LogError($"[{name}] cameraServo вне арены",    this);
+        if (targetBall     != null && targetBall.root     != root) Debug.LogError($"[{name}] targetBall вне арены",     this);
+        if (ballSpawnPoints != null)
+        {
+            for (int i = 0; i < ballSpawnPoints.Length; i++)
+            {
+                var p = ballSpawnPoints[i];
+                if (p != null && p.root != root)
+                    Debug.LogError($"[{name}] ballSpawnPoints[{i}] ('{p.name}') вне арены", this);
+            }
+        }
     }
 
     public override void OnEpisodeBegin()
@@ -295,15 +334,34 @@ public class RobotBrain : Agent
                 robotRot = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
         }
 
-        // --- Позиция мяча: фиксированная точка (например, середина бортика) ---
-        if (ballSpawnPoint != null)
+        // --- Позиция мяча: случайная из ballSpawnPoints (например, 4 бортика арены) ---
+        if (ballSpawnPoints != null && ballSpawnPoints.Length > 0)
         {
-            Vector3 fixedBallPos = ballSpawnPoint.position;
-            if (IsValid(fixedBallPos)) ballPos = fixedBallPos;
-            else Debug.LogWarning($"[RobotBrain] ballSpawnPoint '{ballSpawnPoint.name}' даёт невалидную позицию {fixedBallPos}.");
+            // Собираем валидные точки (не null, не NaN-позиция)
+            int validCount = 0;
+            for (int i = 0; i < ballSpawnPoints.Length; i++)
+                if (ballSpawnPoints[i] != null && IsValid(ballSpawnPoints[i].position))
+                    validCount++;
 
-            // Если мяч слишком близко к роботу (робот заспавнился рядом с бортиком),
-            // отодвинем робота: возьмём другую случайную точку с достаточной дистанцией.
+            if (validCount > 0)
+            {
+                // Выбираем случайную по индексу среди валидных
+                int pick = Random.Range(0, validCount);
+                int idx = 0;
+                for (int i = 0; i < ballSpawnPoints.Length; i++)
+                {
+                    if (ballSpawnPoints[i] == null || !IsValid(ballSpawnPoints[i].position)) continue;
+                    if (idx == pick) { ballPos = ballSpawnPoints[i].position; break; }
+                    idx++;
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[{name}] ballSpawnPoints не содержит валидных точек, использую _ballStartPosition.");
+            }
+
+            // Если мяч оказался слишком близко к роботу (робот заспавнился рядом
+            // с выбранным бортиком), отодвигаем робота в другую свободную точку.
             if (randomizeSpawnPositions && obstacleSpawner != null
                 && obstacleSpawner.unusedPoints.Count >= 1
                 && Vector3.Distance(robotPos, ballPos) < minRobotBallDistance)
@@ -601,10 +659,12 @@ public class RobotBrain : Agent
         AddReward(rAct); _rewardAction += rAct;
 
         // б.1) Штраф за "зигзаг" — асимметрия гусениц при попытке ехать вперёд.
-        //      Активен только когда обе гусеницы жмут в одну сторону (в основном вперёд),
-        //      поэтому чистый разворот на месте (left = -right) НЕ штрафуется.
-        float forwardness = Mathf.Max(0f, (leftTrack + rightTrack) * 0.5f); // 0..1 (движение вперёд)
-        float asymmetry   = Mathf.Abs(leftTrack - rightTrack);              // 0..2
+        //      Активен только когда обе гусеницы жмут вперёд (разворот на месте НЕ штрафуется).
+        //      Плюс — малая асимметрия (в пределах wobbleAsymmetryDeadzone) не штрафуется,
+        //      чтобы модель могла компенсировать разные leftSpeedMul/rightSpeedMul.
+        float forwardness = Mathf.Max(0f, (leftTrack + rightTrack) * 0.5f);
+        float asymmetryRaw = Mathf.Abs(leftTrack - rightTrack);
+        float asymmetry    = Mathf.Max(0f, asymmetryRaw - wobbleAsymmetryDeadzone);
         float rWobble = -asymmetry * forwardness * wobbleAsymmetryPenalty;
         AddReward(rWobble); _rewardAction += rWobble;
 
@@ -684,14 +744,37 @@ public class RobotBrain : Agent
             }
         }
 
-        // к) Терминал: успешный захват
+        // к) Терминал: успешный захват — с верификацией что схвачен ИМЕННО свой мяч.
+        //    Это критично для мульти-арены: gripper.FindBallNearHoldPoint использует
+        //    Physics.OverlapSphere с маской ~0 и матчит по тегу TargetBall — может
+        //    физически захватить мяч из соседней арены и триггернуть ложный success.
         if (gripper != null && gripper.isHolding)
         {
-            AddReward(grabSuccessReward);
-            _rewardTerminal += grabSuccessReward;
-            LogEpisodeStats(success: true);
-            EndEpisode();
-            return;
+            bool ownBall = true;
+            if (targetBall != null && gripper.HeldRigidbody != null)
+            {
+                ownBall = (gripper.HeldRigidbody.transform == targetBall);
+            }
+
+            if (ownBall)
+            {
+                AddReward(grabSuccessReward);
+                _rewardTerminal += grabSuccessReward;
+                LogEpisodeStats(success: true);
+                EndEpisode();
+                return;
+            }
+            else
+            {
+                // Схвачен ЧУЖОЙ мяч — это баг мульти-арены. Отпускаем силой, штрафуем,
+                // не завершаем эпизод. Пишем warning чтобы было видно в логах.
+                Debug.LogWarning($"[{name}] Захвачен ЧУЖОЙ мяч '{gripper.HeldRigidbody.name}' " +
+                                 $"(мой targetBall = '{targetBall.name}'). Отпускаю. " +
+                                 $"Проверь ссылки в префабе или разнеси арены.");
+                gripper.Release();
+                gripper.grabCommand = false;
+                AddReward(-falseGrabPenalty);
+            }
         }
 
         // л) Терминал: вылет за арену.
@@ -718,6 +801,11 @@ public class RobotBrain : Agent
     void LogEpisodeStats(bool success)
     {
         var s = Academy.Instance.StatsRecorder;
+
+        // Диагностика: полезно видеть какой конкретно робот успел / провалил
+        if (success)
+            Debug.Log($"[{name}] SUCCESS в эпизоде #{_episodeCount}, шаг {_episodeStepCount}. " +
+                      $"Схваченный мяч: {(gripper != null && gripper.HeldRigidbody != null ? gripper.HeldRigidbody.name : "null")}");
 
         // Успех эпизода — усредняется во время summary, даёт success rate ∈ [0..1]
         s.Add("Custom/SuccessRate", success ? 1f : 0f);
