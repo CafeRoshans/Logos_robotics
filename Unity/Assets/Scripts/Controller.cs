@@ -104,7 +104,7 @@ public class Controller : MonoBehaviour
         float effRight = PwmToSpeed(currentPwmRight) * maxLinearCmd;
 
         float linearVelocity = (effLeft + effRight) * 0.5f;
-        float angularVelocityRad = (effRight - effLeft) / trackWidth / 100;
+        float angularVelocityRad = (effRight - effLeft) / trackWidth;
         float angularVelocityDeg = angularVelocityRad * Mathf.Rad2Deg;
         angularVelocityDeg = Mathf.Clamp(angularVelocityDeg, -maxAngularSpeedDeg, maxAngularSpeedDeg);
 
