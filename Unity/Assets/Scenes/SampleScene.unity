@@ -130,10 +130,14 @@ PrefabInstance:
     - target: {fileID: 4839152460964292398, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
       propertyPath: m_Model
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 5022602860645237092, guid: f4f842f9ad8a0411e8592056d27732d3, type: 3}
     - target: {fileID: 4839152460964292398, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
       propertyPath: m_BehaviorType
-      value: 2
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5499532089234014371, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
+      propertyPath: useManualInput
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7632328571199749612, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
       propertyPath: m_Name
@@ -783,6 +787,30 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 5626638012084143261, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
+      propertyPath: ballMassMax
+      value: 0.15
+      objectReference: {fileID: 0}
+    - target: {fileID: 5626638012084143261, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
+      propertyPath: ballMassMin
+      value: 0.05
+      objectReference: {fileID: 0}
+    - target: {fileID: 5626638012084143261, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
+      propertyPath: timeoutPenalty
+      value: 0.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 5626638012084143261, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
+      propertyPath: falseGrabPenalty
+      value: 0.01
+      objectReference: {fileID: 0}
+    - target: {fileID: 5626638012084143261, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
+      propertyPath: hardEpisodeStepLimit
+      value: 2000
+      objectReference: {fileID: 0}
+    - target: {fileID: 5626638012084143261, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
+      propertyPath: wallProximityPenalty
+      value: 0.02
+      objectReference: {fileID: 0}
     - target: {fileID: 7632328571199749612, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
       propertyPath: m_Name
       value: Cube (24)
@@ -825,6 +853,14 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8374097132482593524, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9008563441999427703, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
+      propertyPath: m_Model
+      value: 
+      objectReference: {fileID: 5022602860645237092, guid: a21d4267a9fd24179837c0a6f42b1b77, type: 3}
+    - target: {fileID: 9008563441999427703, guid: 1e95ff7bdbf1c4e99a8315de6414f2df, type: 3}
+      propertyPath: m_BehaviorType
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []

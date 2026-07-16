@@ -69,14 +69,24 @@ public class RobotBrain : Agent
     public float actionRatePenalty      = 0.0005f;
     [Tooltip("Штраф за критически близкую стену (по ИК/УЗ). За 500 шагов у стены = -1 к эпизоду.")]
     public float wallProximityPenalty   = 0.002f;
-    [Tooltip("Бонус за то, что мяч в центре кадра")]
-    public float centeringBonus         = 0.005f;
+
+    [Tooltip("Штраф за асимметрию гусениц при движении ВПЕРЁД — нужен чтобы робот не ехал зигзагом. " +
+             "Активен только когда обе гусеницы жмут вперёд (иначе повороты бы наказывались). " +
+             "Формула: |leftTrack - rightTrack| × max(0, (leftTrack+rightTrack)/2) × penalty.")]
+    public float wobbleAsymmetryPenalty = 0.01f;
+
+    [Tooltip("Штраф за смену знака поворота между шагами (влево-вправо-влево). " +
+             "Реальный робот не может так быстро менять направление вращения. " +
+             "Если (leftTrack-rightTrack) сменил знак — штраф.")]
+    public float steerFlipPenalty = 0.02f;
     [Tooltip("Терминальный бонус за успешный захват мяча")]
     public float grabSuccessReward      = 5.0f;
     [Tooltip("Терминальный штраф за вылет за пределы арены")]
-    public float outOfArenaPenalty      = -2.0f;
+    // [Tooltip("Модуль штрафа за вылет за арену. Минус в коде: AddReward(-outOfArenaPenalty).")]
+    public float outOfArenaPenalty      = 2.0f;
     [Tooltip("Небольшой штраф за каждый шаг — стимулирует скорость решения")]
-    public float perStepPenalty         = -0.0005f;
+    // [Tooltip("Модуль per-step штрафа. Минус в коде: AddReward(-perStepPenalty).")]
+    public float perStepPenalty         = 0.0005f;
 
     [Header("Штраф за движение назад")]
     [Tooltip("Штраф за движение назад (когда корпус реально смещается против transform.forward)")]
@@ -183,7 +193,8 @@ public class RobotBrain : Agent
     [Tooltip("Жёсткий лимит на количество вызовов OnActionReceived за эпизод. 0 = выключено.")]
     public int hardEpisodeStepLimit = 3000;
     [Tooltip("Штраф за окончание эпизода по таймауту")]
-    public float timeoutPenalty = -0.5f;
+    // [Tooltip("Модуль штрафа за окончание эпизода по таймауту. Минус в коде: AddReward(-timeoutPenalty).")]
+    public float timeoutPenalty = 0.5f;
 
     // --- служебные ---
     private Rigidbody _rb;
@@ -488,8 +499,8 @@ public class RobotBrain : Agent
 
         if (hardEpisodeStepLimit > 0 && _episodeStepCount >= hardEpisodeStepLimit)
         {
-            AddReward(timeoutPenalty);
-            _rewardTerminal += timeoutPenalty;
+            AddReward(-timeoutPenalty);
+            _rewardTerminal -= timeoutPenalty;
             LogEpisodeStats(success: false);
             EndEpisode();
             return;
@@ -589,6 +600,28 @@ public class RobotBrain : Agent
         float rAct = -(dLeft + dRight) * actionRatePenalty;
         AddReward(rAct); _rewardAction += rAct;
 
+        // б.1) Штраф за "зигзаг" — асимметрия гусениц при попытке ехать вперёд.
+        //      Активен только когда обе гусеницы жмут в одну сторону (в основном вперёд),
+        //      поэтому чистый разворот на месте (left = -right) НЕ штрафуется.
+        float forwardness = Mathf.Max(0f, (leftTrack + rightTrack) * 0.5f); // 0..1 (движение вперёд)
+        float asymmetry   = Mathf.Abs(leftTrack - rightTrack);              // 0..2
+        float rWobble = -asymmetry * forwardness * wobbleAsymmetryPenalty;
+        AddReward(rWobble); _rewardAction += rWobble;
+
+        // б.2) Штраф за смену знака поворота между шагами.
+        //      Если робот кидался "лево-право-лево" — это невозможно на реальном
+        //      роботе (моторы + инерция), плюс это визуально зигзаг.
+        float curSteer  = leftTrack - rightTrack;
+        float prevSteer = _prevLeft - _prevRight;
+        bool signFlipped = (curSteer * prevSteer < 0f)
+                           && (Mathf.Abs(curSteer) > 0.1f)
+                           && (Mathf.Abs(prevSteer) > 0.1f);
+        if (signFlipped)
+        {
+            float rFlip = -steerFlipPenalty;
+            AddReward(rFlip); _rewardAction += rFlip;
+        }
+
         // в) Две отдельные, но связанные награды за работу с камерой/корпусом:
         //
         //   в.1) centeringBonus — мяч близко к центру кадра камеры (по yolo.horizontalAngle).
@@ -625,7 +658,8 @@ public class RobotBrain : Agent
         }
 
         // д) Мелкий постоянный штраф — не стоять
-        AddReward(perStepPenalty);
+        AddReward(-perStepPenalty);
+        _rewardStep -= perStepPenalty;
 
         // е) Штраф за движение назад — по проекции РЕАЛЬНОЙ (вручную посчитанной по дельте
         // позиции) скорости корпуса на forward. Так штраф не срабатывает при развороте на месте
@@ -634,7 +668,9 @@ public class RobotBrain : Agent
         float forwardSpeed = Vector3.Dot(_lastVelocity, transform.forward);
         if (forwardSpeed < -backwardMovementDeadzone)
         {
-            AddReward(forwardSpeed * backwardMovementPenalty); // forwardSpeed < 0 → отрицательная награда
+            // forwardSpeed < 0 (робот пятится) → штраф пропорционален величине заднего хода.
+            // Явный минус в стиле A: magnitude × penalty, минус применяется вручную.
+            AddReward(-Mathf.Abs(forwardSpeed) * backwardMovementPenalty);
         }
 
         // з) Штраф за ложный захват — команда grab, когда мяч не подтверждён рядом с клешнёй.
@@ -668,8 +704,8 @@ public class RobotBrain : Agent
             Mathf.Abs(p.z) > arenaHalfSize.z ||
             p.y < -arenaHalfSize.y || p.y > arenaHalfSize.y)
         {
-            AddReward(outOfArenaPenalty);
-            _rewardTerminal += outOfArenaPenalty;
+            AddReward(-outOfArenaPenalty);
+            _rewardTerminal -= outOfArenaPenalty;
             LogEpisodeStats(success: false);
             EndEpisode();
         }
