@@ -63,3 +63,5 @@ Unity/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Pr
 Unity/Assets/ML-Agents/Timers/SampleScene_timers.json
 Unity/results/
 results/
+Unity/Assets/Models/
+**/*.log

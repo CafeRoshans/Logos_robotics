@@ -24,8 +24,8 @@ behaviors:
         strength: 1.0
     max_steps: 50000000
     time_horizon: 512
-    summary_freq: 20000
-    checkpoint_interval: 500000
+    summary_freq: 1000
+    checkpoint_interval: 10000
     keep_checkpoints: 10
 
 

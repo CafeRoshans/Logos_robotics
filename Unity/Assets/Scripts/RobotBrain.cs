@@ -16,6 +16,12 @@ using System.Collections.Generic;
 /// Важно: на TrackController, которым управляет этот агент, useManualInput должен
 /// быть выключен (false) — иначе клавиатура (если Behavior Type != Heuristic и кто-то
 /// жмёт клавиши) будет затирать команды, приходящие из OnActionReceived.
+///
+/// ВАЖНО про скорость: Controller двигает Rigidbody кинематически (MovePosition/MoveRotation),
+/// поэтому rb.linearVelocity НЕ обновляется автоматически физическим движком и всегда остаётся
+/// (0,0,0). Скорость корпуса здесь считается вручную — по фактической дельте позиции между
+/// последовательными вызовами OnActionReceived — и используется и для наблюдения №14,
+/// и для штрафа за движение назад (backwardMovementPenalty).
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class RobotBrain : Agent
@@ -34,7 +40,11 @@ public class RobotBrain : Agent
     public ObstacleSpawner obstacleSpawner;
 
     [Header("Сервопривод камеры")]
-    [Tooltip("Максимальный угол отклонения камеры ± (градусы)")]
+    [Tooltip("Максимальный угол отклонения камеры ± (градусы). Специально НЕ ограничиваем узко — " +
+             "камера должна свободно 'осматриваться' и искать мяч в широком диапазоне. Награда за " +
+             "центрирование мяча в кадре есть (centeringBonus), но основной и более весомый стимул — " +
+             "довернуть КОРПУС туда же, куда смотрит камера (bodyCameraAlignmentBonus), так что широкий " +
+             "диапазон камеры не создаёт лазейки 'стою и просто верчу камерой'.")]
     public float cameraServoMaxAngle = 90f;
     [Tooltip("Скорость поворота сервопривода (град/сек) при полном сигнале")]
     public float cameraServoSpeedDegPerSec = 90f;
@@ -67,6 +77,41 @@ public class RobotBrain : Agent
     public float outOfArenaPenalty      = -2.0f;
     [Tooltip("Небольшой штраф за каждый шаг — стимулирует скорость решения")]
     public float perStepPenalty         = -0.0005f;
+
+    [Header("Штраф за движение назад")]
+    [Tooltip("Штраф за движение назад (когда корпус реально смещается против transform.forward)")]
+    public float backwardMovementPenalty = 0.01f;
+    [Tooltip("Мёртвая зона по скорости (м/с), ниже которой направление не штрафуем (шум/стояние на месте)")]
+    public float backwardMovementDeadzone = 0.01f;
+
+    [Header("Центрирование мяча в кадре (для точного прицеливания клешнёй)")]
+    [Tooltip("Награда за то, что мяч близко к центру кадра камеры (по yolo.horizontalAngle), " +
+             "независимо от угла камеры относительно корпуса. Нужна отдельно от bodyCameraAlignmentBonus: " +
+             "1) агент должен понимать, когда камера/мяч выставлены настолько точно, что можно хватать " +
+             "клешнёй; 2) чем точнее камера центрирует мяч, тем точнее потом можно довернуть корпус " +
+             "на меньший угол, а не грубо 'в сторону мяча'. Вес меньше, чем у bodyCameraAlignmentBonus — " +
+             "это вспомогательный сигнал, а не основной драйвер поведения.")]
+    public float centeringBonus = 0.005f;
+
+    [Header("Совмещение корпуса и камеры (основной стимул разворота корпуса)")]
+    [Tooltip("Награда, когда корпус развёрнут туда же, куда смотрит камера (угол сервопривода " +
+             "относительно корпуса близок к 0), И в этот момент мяч виден. Раньше агент получал " +
+             "награду просто за то, что камера навела мяч в центр кадра — и находил дешёвый способ " +
+             "стоять на месте, крутя только камерой. Теперь награда требует, чтобы КОРПУС сам довернулся " +
+             "туда, куда смотрит камера: камера может свободно искать мяч в широком диапазоне, но пока " +
+             "корпус не подстроится под её направление — награды не будет. Вес больше, чем у centeringBonus — " +
+             "это главный стимул именно доворачивать корпус и потом ехать, а не просто смотреть.")]
+    public float bodyCameraAlignmentBonus = 0.007f;
+    [Tooltip("Допуск (градусы) между углом камеры (относительно корпуса) и 0, при котором " +
+             "считаем корпус и камеру 'совмещёнными'. По ТЗ — 0..3°.")]
+    public float bodyCameraAlignmentToleranceDeg = 3f;
+
+
+    [Header("Штраф за ложный захват")]
+    [Tooltip("Штраф за команду grab, когда мяч не рядом с клешнёй")]
+    public float falseGrabPenalty = 0.01f;
+    [Tooltip("Порог ИК клешни, выше которого считаем, что мяч действительно рядом")]
+    public float grabProximityIRThreshold = 0.5f;
 
     [Header("Случайный спавн робота и мяча")]
     [Tooltip("Спавнить робота в случайной точке из obstacleSpawner.unusedPoints при каждом эпизоде")]
@@ -155,6 +200,10 @@ public class RobotBrain : Agent
     private float _lastKnownBallDirection = 0f;
     private int   _episodeStepCount       = 0;
 
+    // Скорость корпуса, вычисленная вручную по дельте позиции (см. комментарий к классу).
+    private Vector3 _prevPosition;
+    private Vector3 _lastVelocity;
+
     private int _globalStepCount = 0; // для логирования в Debug.Log, не сбрасывается на OnEpisodeBegin
     private int _episodeCount    = 0; // счётчик эпизодов агента, для периодического пересоздания препятствий
 
@@ -184,6 +233,8 @@ public class RobotBrain : Agent
         _rb = GetComponent<Rigidbody>();
         _startPosition = transform.position;
         _startRotation = transform.rotation;
+        _prevPosition = _startPosition;
+        _lastVelocity = Vector3.zero;
         if (targetBall != null) _ballStartPosition = targetBall.position;
     }
 
@@ -335,6 +386,11 @@ public class RobotBrain : Agent
         _lastKnownBallDirection = 0f;
         _episodeStepCount       = 0;
 
+        // Сброс вручную-считаемой скорости — иначе первый шаг нового эпизода
+        // засчитает "прыжок" из старой позиции конца прошлого эпизода в стартовую как движение.
+        _prevPosition = transform.position;
+        _lastVelocity = Vector3.zero;
+
         // Сброс кастомных счётчиков
         _rewardDistance = 0f;
         _rewardWall     = 0f;
@@ -411,8 +467,9 @@ public class RobotBrain : Agent
         if (heading > 180f) heading -= 360f;
         sensor.AddObservation(heading / 180f);
 
-        // 14. Скорость робота (м/с)
-        sensor.AddObservation(_rb != null ? _rb.linearVelocity.magnitude : 0f);
+        // 14. Скорость робота (м/с) — вручную посчитанная по дельте позиции,
+        // а не rb.linearVelocity (для кинематического Rigidbody она всегда 0).
+        sensor.AddObservation(_lastVelocity.magnitude);
 
         // 15. Время с последней детекции мяча (сек)
         sensor.AddObservation(_timeSinceLastDetection);
@@ -489,14 +546,23 @@ public class RobotBrain : Agent
             _timeSinceLastDetection += Time.deltaTime;
         }
 
+        // 4b. Пересчёт скорости корпуса по дельте позиции — ДО ComputeRewards,
+        // чтобы штраф за движение назад мог её использовать. Rigidbody здесь кинематический
+        // (Controller двигает через MovePosition/MoveRotation), поэтому rb.linearVelocity
+        // не отражает реальное перемещение и использовать её нельзя.
+        Vector3 currentPosition = transform.position;
+        float dt = Mathf.Max(Time.deltaTime, 0.0001f); // защита от деления на 0
+        _lastVelocity = (currentPosition - _prevPosition) / dt;
+        _prevPosition = currentPosition;
+
         // 5. Награды
-        ComputeRewards(leftTrack, rightTrack);
+        ComputeRewards(leftTrack, rightTrack, gripAct);
 
         _prevLeft  = leftTrack;
         _prevRight = rightTrack;
     }
 
-    void ComputeRewards(float leftTrack, float rightTrack)
+    void ComputeRewards(float leftTrack, float rightTrack, int gripAct)
     {
         // Кадровые счётчики для метрик — считаем эффективную видимость,
         // чтобы Custom/BallVisibleFraction отражал реальный сигнал, доходящий до модели.
@@ -523,28 +589,66 @@ public class RobotBrain : Agent
         float rAct = -(dLeft + dRight) * actionRatePenalty;
         AddReward(rAct); _rewardAction += rAct;
 
-        // в) Бонус за центрирование мяча в кадре
-        if (ballVisible)
+        // в) Две отдельные, но связанные награды за работу с камерой/корпусом:
+        //
+        //   в.1) centeringBonus — мяч близко к центру кадра камеры (по yolo.horizontalAngle).
+        //        Не зависит от угла камеры относительно корпуса. Даёт агенту точный сигнал,
+        //        когда камера действительно "прицелена" на мяч (полезно для решения о захвате
+        //        клешнёй и для точного финального доворота корпуса на малый угол).
+        //
+        //   в.2) bodyCameraAlignmentBonus — корпус развёрнут туда же, куда смотрит камера
+        //        (угол сервопривода относительно корпуса close to 0), И мяч при этом виден.
+        //        Вес выше, чем у centeringBonus — это основной стимул именно крутить гусеницы
+        //        и доворачивать корпус, а не просто наводить камеру и стоять на месте.
+        //        _cameraServoAngle — угол ОТНОСИТЕЛЬНО корпуса, камера не ограничена в диапазоне
+        //        (cameraServoMaxAngle = 90°), пусть свободно "осматривается" в поиске мяча.
+        if (yolo != null && yolo.isVisible)
         {
-            float centered = 1f - Mathf.Abs(yolo.horizontalAngle);
-            float rCen = centered * centeringBonus;
-            AddReward(rCen); _rewardCenter += rCen;
+            float centered = 1f - Mathf.Abs(yolo.horizontalAngle); // 1 в центре кадра, 0 на краю
+            AddReward(centered * centeringBonus);
+
+            float absServoAngle = Mathf.Abs(_cameraServoAngle);
+            if (absServoAngle <= bodyCameraAlignmentToleranceDeg)
+            {
+                // Плавный градиент внутри допуска: чем ближе камера к 0° относительно корпуса — тем больше награда.
+                float alignment = 1f - (absServoAngle / Mathf.Max(0.0001f, bodyCameraAlignmentToleranceDeg));
+                AddReward(alignment * bodyCameraAlignmentBonus);
+            }
         }
 
         // г) Штраф за критически близкие стены
         if (sensors != null)
         {
-            float rWall = 0f;
-            if (sensors.ultrasonicNormalized < 0.15f) rWall -= wallProximityPenalty;
-            if (sensors.leftIR  == 1)                 rWall -= wallProximityPenalty;
-            if (sensors.rightIR == 1)                 rWall -= wallProximityPenalty;
-            if (rWall != 0f) { AddReward(rWall); _rewardWall += rWall; }
+            if (sensors.ultrasonicNormalized < 0.05f) AddReward(-wallProximityPenalty);
+            if (sensors.leftIR  == 1)                 AddReward(-wallProximityPenalty);
+            if (sensors.rightIR == 1)                 AddReward(-wallProximityPenalty);
         }
 
-        // д) Мелкий постоянный штраф
-        AddReward(perStepPenalty); _rewardStep += perStepPenalty;
+        // д) Мелкий постоянный штраф — не стоять
+        AddReward(perStepPenalty);
 
-        // е) Терминал: успешный захват
+        // е) Штраф за движение назад — по проекции РЕАЛЬНОЙ (вручную посчитанной по дельте
+        // позиции) скорости корпуса на forward. Так штраф не срабатывает при развороте на месте
+        // (там продольная составляющая ≈ 0) и корректно учитывает фактическое перемещение,
+        // а не сигналы гусениц напрямую.
+        float forwardSpeed = Vector3.Dot(_lastVelocity, transform.forward);
+        if (forwardSpeed < -backwardMovementDeadzone)
+        {
+            AddReward(forwardSpeed * backwardMovementPenalty); // forwardSpeed < 0 → отрицательная награда
+        }
+
+        // з) Штраф за ложный захват — команда grab, когда мяч не подтверждён рядом с клешнёй.
+        // Без этого агент может научиться спамить grab "на всякий случай".
+        if (gripAct == 1 && (gripper == null || !gripper.isHolding))
+        {
+            bool ballNear = sensors != null && (float)sensors.gripperIR > grabProximityIRThreshold;
+            if (!ballNear)
+            {
+                AddReward(-falseGrabPenalty);
+            }
+        }
+
+        // к) Терминал: успешный захват
         if (gripper != null && gripper.isHolding)
         {
             AddReward(grabSuccessReward);
@@ -554,7 +658,10 @@ public class RobotBrain : Agent
             return;
         }
 
-        // ж) Терминал: вылет за арену
+        // л) Терминал: вылет за арену.
+        // Границы отсчитываются от стартовой позиции + локальный offset арены,
+        // а не от глобального (0,0,0) — иначе робот, спавнящийся не в нуле,
+        // сразу считается вылетевшим.
         Vector3 arenaCenter = _startPosition + arenaCenterOffset;
         Vector3 p = transform.position - arenaCenter;
         if (Mathf.Abs(p.x) > arenaHalfSize.x ||
