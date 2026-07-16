@@ -88,7 +88,7 @@ public class ObstacleSpawner : MonoBehaviour
         }
 
         // Публикуем оставшиеся точки как «свободные» — из них RobotBrain
-        // выберет случайные позиции для робота и мяча.
+        // выберет случайные позиции для робота
         unusedPoints.Clear();
         for (int i = take; i < n; i++)
         {

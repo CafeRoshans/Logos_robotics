@@ -44,6 +44,12 @@ public class Controller : MonoBehaviour
     [HideInInspector] public float leftInput = 0f;
     [HideInInspector] public float rightInput = 0f;
 
+    // Асимметричные множители моторов — реалистичный износ редукторов.
+    // Задаются извне (RobotBrain.OnEpisodeBegin) для доменной рандомизации.
+    // 1.0 = мотор работает по-номиналу, 0.9 = чуть слабее, 1.1 = чуть сильнее.
+    [HideInInspector] public float leftSpeedMul  = 1f;
+    [HideInInspector] public float rightSpeedMul = 1f;
+
     Rigidbody rb;
     float trackWidth;
     float currentPwmLeft, currentPwmRight;
@@ -100,8 +106,10 @@ public class Controller : MonoBehaviour
         currentPwmLeft = StepToward(currentPwmLeft, targetPwmLeft, maxPwmStep, minMotorPwm);
         currentPwmRight = StepToward(currentPwmRight, targetPwmRight, maxPwmStep, minMotorPwm);
 
-        float effLeft = PwmToSpeed(currentPwmLeft) * maxLinearCmd;
-        float effRight = PwmToSpeed(currentPwmRight) * maxLinearCmd;
+        // Применяем per-side мультипликаторы — эмулируют разное состояние редукторов
+        // (левый борт может ехать чуть быстрее правого и наоборот).
+        float effLeft  = PwmToSpeed(currentPwmLeft)  * maxLinearCmd * leftSpeedMul;
+        float effRight = PwmToSpeed(currentPwmRight) * maxLinearCmd * rightSpeedMul;
 
         float linearVelocity = (effLeft + effRight) * 0.5f;
         float angularVelocityRad = (effRight - effLeft) / trackWidth / 100;
