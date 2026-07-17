@@ -2211,9 +2211,9 @@ MonoBehaviour:
     VectorActionDescriptions: []
     VectorActionSpaceType: 1
     hasUpgradedBrainParametersWithActionSpec: 1
-  m_Model: {fileID: 0}
+  m_Model: {fileID: 5022602860645237092, guid: 6924c756d6a5f4a279c05575d8ea80f2, type: 3}
   m_InferenceDevice: 0
-  m_BehaviorType: 0
+  m_BehaviorType: 2
   m_BehaviorName: GFSX_Brain
   TeamId: 0
   m_UseChildSensors: 1
@@ -2320,11 +2320,13 @@ MonoBehaviour:
   tracks: {fileID: 3657878881065950151}
   gripper: {fileID: 1081570319156500118}
   sensors: {fileID: 434451357782293778}
+  simCam: {fileID: 7678926751972867306}
   yolo: {fileID: 4827791581018501935}
   cameraServo: {fileID: 7170547908202784088}
   targetBall: {fileID: 2662588395027316777}
   obstacleSpawner: {fileID: 401300216358652757}
-  rosBridge: {fileID: 0}
+  useRealRobot: 1
+  rosBridge: {fileID: 6364411629071752895}
   cameraServoMaxAngle: 90
   cameraMaxStepDeg: 8
   cameraTargetEmaAlpha: 0.15
@@ -2488,6 +2490,7 @@ MonoBehaviour:
   normalizedAngle: 0
   normalizedDistance: 0
   seesBall: 0
+  visibilityTimeout: 0.5
   isVisible: 0
   horizontalAngle: 0
 --- !u!114 &6364411629071752895

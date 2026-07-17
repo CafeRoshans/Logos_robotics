@@ -28,11 +28,15 @@ public class RealVision : MonoBehaviour
     public float normalizedDistance;
     public bool seesBall;
 
+    [Tooltip("Если за это время (сек) не пришёл ни один пакет — мяч считается невидимым. " +
+             "Защита от зависания при обрыве UDP.")]
+    public float visibilityTimeout = 0.5f;
+
     private CancellationTokenSource cts;
     private ConcurrentQueue<YoloDataPacket> udpQueue = new ConcurrentQueue<YoloDataPacket>();
+    private float _lastPacketTime = -1f;
 
-    [HideInInspector] public bool  isVisible = false;
-
+    [HideInInspector] public bool  isVisible       = false;
     [HideInInspector] public float horizontalAngle = 0f;
 
     void Start()
@@ -70,27 +74,33 @@ public class RealVision : MonoBehaviour
 
             if (seesBall)
             {
-                // Ограничиваем угол [-1, 1]
-                normalizedAngle = Mathf.Clamp(packet.angle, -1f, 1f);
-                
-                // Записываем нормализованную высоту рамки (чем больше мяч, тем он ближе)
-                normalizedDistance = packet.distance; 
-
-                isVisible = true;
-
-                horizontalAngle = packet.angle;
+                isVisible          = true;
+                horizontalAngle    = Mathf.Clamp(packet.angle, -1f, 1f);
+                normalizedAngle    = horizontalAngle;
+                normalizedDistance = Mathf.Clamp01(packet.distance);
             }
             else
             {
-                normalizedAngle = 0f;
-                normalizedDistance = 1f; // 1.0 = далеко/мяч не виден
+                isVisible          = false;   // сбрасываем — иначе "видит" навсегда
+                horizontalAngle    = 0f;
+                normalizedAngle    = 0f;
+                normalizedDistance = 1f;
             }
+            _lastPacketTime = Time.time;
+        }
+
+        // Таймаут: если давно нет пакетов (робот отключился или UDP лаг) — сбрасываем видимость
+        if (_lastPacketTime >= 0f && (Time.time - _lastPacketTime) > visibilityTimeout)
+        {
+            isVisible          = false;
+            horizontalAngle    = 0f;
+            normalizedDistance = 1f;
         }
     }
 
     void OnDestroy()
     {
-        cts?.Cancel(); // Останавливаем фоновый поток при выходе
+        cts?.Cancel();
     }
 }
 

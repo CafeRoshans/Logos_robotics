@@ -30,6 +30,9 @@ public class RobotBrain : Agent
     public Controller tracks;
     public GripperController gripper;
     public VirtualSensors sensors;
+    [Tooltip("Симуляция камеры — используется ВО ВРЕМЯ ТРЕНИРОВКИ. Должен быть назначен в инспекторе для каждой арены.")]
+    public SimulatedYoloCamera simCam;
+    [Tooltip("UDP-приёмник от реальной YOLO — используется ТОЛЬКО когда useRealRobot=true.")]
     public RealVision yolo;
     [Tooltip("Transform, вокруг Y которого крутится камера (сервопривод). Может быть родителем самой камеры.")]
     public Transform cameraServo;
@@ -39,6 +42,10 @@ public class RobotBrain : Agent
              "будет вызван Respawn() и препятствия перераскладываются случайно.")]
     public ObstacleSpawner obstacleSpawner;
 
+    [Header("Реальный робот (ROS)")]
+    [Tooltip("Если true — читаем видение из yolo (UDP от реального робота) и шлём команды через rosBridge. " +
+             "Если false — читаем из simCam и rosBridge игнорируется (режим тренировки).")]
+    public bool useRealRobot = false;
     public ROSBridge rosBridge;
 
     [Header("Сервопривод камеры")]
@@ -325,10 +332,24 @@ public class RobotBrain : Agent
     // Реальный ROS pipeline: sensor → serial → node → topic → Unity. Латентность есть.
     private Queue<float[]> sensorBuffer = new Queue<float[]>();
     private float[] _delayedSensors = new float[4] { 1f, 0f, 0f, 0f };
-    private int currentActionLatency = 5; 
+    private int currentActionLatency = 5;
 
-    
-
+    // ---- Helpers: абстрагируют источник видения (sim vs реальный робот) ----
+    bool VisionIsVisible()
+    {
+        if (useRealRobot) return yolo != null && yolo.isVisible;
+        return simCam != null && simCam.isVisible;
+    }
+    float VisionHorizontalAngle()
+    {
+        if (useRealRobot) return yolo != null ? yolo.horizontalAngle : 0f;
+        return simCam != null ? simCam.horizontalAngle : 0f;
+    }
+    float VisionNormalizedDistance()
+    {
+        if (useRealRobot) return yolo != null ? yolo.normalizedDistance : 1f;
+        return simCam != null ? simCam.normalizedDistance : 1f;
+    }
 
     public override void Initialize()
     {
@@ -359,7 +380,7 @@ public class RobotBrain : Agent
         CheckSameArena(tracks,           "tracks");
         CheckSameArena(gripper,          "gripper");
         CheckSameArena(sensors,          "sensors");
-        CheckSameArena(yolo,             "yolo");
+        CheckSameArena(simCam,           "simCam");   // simCam — в арене; yolo (RealVision) — глобальный
         CheckSameArena(obstacleSpawner,  "obstacleSpawner");
         if (cameraServo    != null && cameraServo.root    != root) Debug.LogError($"[{name}] cameraServo вне арены",    this);
         if (targetBall     != null && targetBall.root     != root) Debug.LogError($"[{name}] targetBall вне арены",     this);
@@ -628,10 +649,10 @@ public class RobotBrain : Agent
         // === VISION (наблюдения 5-8) с шумом ===
         bool visible = SeesBallEffective();
         float angleObs = visible
-            ? Mathf.Clamp(yolo.horizontalAngle + Random.Range(-visionAngleNoise, visionAngleNoise), -1f, 1f)
+            ? Mathf.Clamp(VisionHorizontalAngle() + Random.Range(-visionAngleNoise, visionAngleNoise), -1f, 1f)
             : 0f;
         float distObs = visible
-            ? Mathf.Clamp01(yolo.normalizedDistance + Random.Range(-visionDistanceNoise, visionDistanceNoise))
+            ? Mathf.Clamp01(VisionNormalizedDistance() + Random.Range(-visionDistanceNoise, visionDistanceNoise))
             : 1f;
         sensor.AddObservation(angleObs);
         sensor.AddObservation(distObs);
@@ -761,11 +782,8 @@ public class RobotBrain : Agent
                 // Автоматический режим (как в референсе): grabCommand всегда true.
                 // GripperController.CanGrab() сам решит хватать по IR-датчику клешни.
                 gripper.grabCommand = true;
-                // При срабатывании захвата мяча:
-                if (rosBridge != null)
-                {
-                    rosBridge.PublishGripperCmd(2); // Отправить команду закрытия в ROS
-                }
+                if (useRealRobot && rosBridge != null && gripper.isHolding)
+                    rosBridge.PublishGripperCmd(2); // закрыть клешню на реальном роботе
             }
             else
             {
@@ -778,7 +796,7 @@ public class RobotBrain : Agent
         // 4. Обновление служебных переменных детекции — используем эффективную видимость
         if (SeesBallEffective())
         {
-            _lastKnownBallDirection = yolo.horizontalAngle;
+            _lastKnownBallDirection = VisionHorizontalAngle();
             _timeSinceLastDetection = 0f;
         }
         else
@@ -786,20 +804,18 @@ public class RobotBrain : Agent
             _timeSinceLastDetection += Time.deltaTime;
         }
 
-        // 4b. Пересчёт скорости корпуса по дельте позиции — ДО ComputeRewards,
-        // чтобы штраф за движение назад мог её использовать. Rigidbody здесь кинематический
-        // (Controller двигает через MovePosition/MoveRotation), поэтому rb.linearVelocity
-        // не отражает реальное перемещение и использовать её нельзя.
+        // 4b. Пересчёт скорости корпуса по дельте позиции — ДО ComputeRewards.
         Vector3 currentPosition = transform.position;
-        float dt = Mathf.Max(Time.deltaTime, 0.0001f); // защита от деления на 0
+        float dt = Mathf.Max(Time.deltaTime, 0.0001f);
         _lastVelocity = (currentPosition - _prevPosition) / dt;
         _prevPosition = currentPosition;
 
-        // if (rosBridge != null)
-        // {
-        //     rosBridge.PublishCommand(gas, steering);
-        //     rosBridge.PublishCameraCmd(cameraYawInput);
-        // }
+        // 4c. ROS: отправляем команды на реальный робот (только в режиме useRealRobot)
+        if (useRealRobot && rosBridge != null)
+        {
+            rosBridge.PublishCommand(gas, steer);
+            rosBridge.PublishCameraCmd(_cameraServoAngle);
+        }
 
         // 5. Награды
         ComputeRewards(gas, steer, camTarget, gripAct);
@@ -859,9 +875,9 @@ public class RobotBrain : Agent
         //        и доворачивать корпус, а не просто наводить камеру и стоять на месте.
         //        _cameraServoAngle — угол ОТНОСИТЕЛЬНО корпуса, камера не ограничена в диапазоне
         //        (cameraServoMaxAngle = 90°), пусть свободно "осматривается" в поиске мяча.
-        if (yolo != null && yolo.isVisible)
+        if (VisionIsVisible())
         {
-            float centered = 1f - Mathf.Abs(yolo.horizontalAngle); // 1 в центре кадра, 0 на краю
+            float centered = 1f - Mathf.Abs(VisionHorizontalAngle()); // 1 в центре кадра, 0 на краю
             AddReward(centered * centeringBonus);
 
             float absServoAngle = Mathf.Abs(_cameraServoAngle);
@@ -1148,7 +1164,7 @@ public class RobotBrain : Agent
     /// </summary>
     bool SeesBallEffective()
     {
-        if (yolo == null || !yolo.isVisible) return false;
+        if (!VisionIsVisible()) return false;
         if (_dropoutStepsLeft > 0) return false;
         return true;
     }
