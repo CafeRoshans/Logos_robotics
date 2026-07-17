@@ -2213,7 +2213,7 @@ MonoBehaviour:
     hasUpgradedBrainParametersWithActionSpec: 1
   m_Model: {fileID: 5022602860645237092, guid: 6924c756d6a5f4a279c05575d8ea80f2, type: 3}
   m_InferenceDevice: 0
-  m_BehaviorType: 2
+  m_BehaviorType: 0
   m_BehaviorName: GFSX_Brain
   TeamId: 0
   m_UseChildSensors: 1
@@ -2316,7 +2316,7 @@ MonoBehaviour:
   agentParameters:
     maxStep: 0
   hasUpgradedFromAgentParameters: 1
-  MaxStep: 3000
+  MaxStep: 2000
   tracks: {fileID: 3657878881065950151}
   gripper: {fileID: 1081570319156500118}
   sensors: {fileID: 434451357782293778}
@@ -2331,21 +2331,21 @@ MonoBehaviour:
   cameraMaxStepDeg: 8
   cameraTargetEmaAlpha: 0.15
   cameraTargetDeadband: 0.05
-  cameraServoSpeedDegPerSec: 90
   arenaCenterOffset: {x: 0, y: 0, z: 2.9}
   arenaHalfSize: {x: 1.42, y: 1, z: 3.25}
   distanceRewardScale: 1
-  closeDistanceThreshold: 0.5
-  closeDistanceBonusMul: 3
-  actionRatePenalty: 0.001
+  distanceRewardAlpha: 2
+  closeRadius: 0.35
+  driveRatePenalty: 0.001
+  cameraRatePenalty: 0.005
   wallProximityPenalty: 0.015
+  timeoutPenalty: 0.5
+  obstacleTag: Obstacle
+  obstacleCollisionPenalty: 1
+  endEpisodeOnObstacleHit: 1
   grabSuccessReward: 5
-  holdStepsRequired: 50
-  holdStepReward: 0.02
   blindApproachBonus: 0.003
   blindApproachMinForwardSpeed: 0.05
-  distanceRewardCloseMulBase: 2
-  distanceRewardCloseMulSlope: 4
   ultrasonicNoise: 0.05
   visionAngleNoise: 0.03
   visionDistanceNoise: 0.09
@@ -2353,15 +2353,18 @@ MonoBehaviour:
   useYamlEnvParams: 1
   useAutomaticGripper: 1
   hardStopOnHold: 1
-  precisionApproachDistance: 0.5
-  precisionSlowdownSpeed: 0.15
-  precisionSlowdownBonus: 0.005
-  precisionOverspeedPenalty: 0.01
-  outOfArenaPenalty: 2
   perStepPenalty: 0.001
+  outOfArenaPenalty: 2
+  gentleLinearSpeedThresh: 0.08
+  gentleAngularSpeedThresh: 0.15
+  gentlePlacementBonus: 0.008
+  gentleOverspeedPenalty: 0.015
   backwardMovementPenalty: 0.01
   backwardMovementDeadzone: 0.01
-  centeringBonus: 0.03
+  centeringBonusMax: 0.012
+  centeringStreakCap: 30
+  centeringAngleThreshold: 0.25
+  centeringMinMovement: 0.03
   bodyCameraAlignmentBonus: 0
   bodyCameraAlignmentToleranceDeg: 3
   falseGrabPenalty: 0
@@ -2375,11 +2378,7 @@ MonoBehaviour:
   - {fileID: 6016700507148416519}
   - {fileID: 4872751535100657784}
   randomizeBallMass: 1
-  ballMassMin: 0.01
-  ballMassMax: 0.1
   randomizeRobotMass: 1
-  robotMassMin: 0.8
-  robotMassMax: 1.5
   randomizeMotors: 1
   motorCommonMulMin: 0.85
   motorCommonMulMax: 1.15
@@ -2393,8 +2392,6 @@ MonoBehaviour:
   burstDropoutMinSteps: 5
   burstDropoutMaxSteps: 15
   obstacleRespawnEveryEpisodes: 1000
-  hardEpisodeStepLimit: 3000
-  timeoutPenalty: 0.5
 --- !u!65 &8869352244993516760
 BoxCollider:
   m_ObjectHideFlags: 0

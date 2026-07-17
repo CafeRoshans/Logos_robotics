@@ -70,3 +70,6 @@ Unity/results/
 results/
 Unity/Assets/Models/
 **/*.log
+
+Build/
+*.zip
