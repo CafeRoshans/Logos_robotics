@@ -10,7 +10,7 @@ using System.Collections.Generic;
 /// Настройки Behavior Parameters (задаются в инспекторе):
 ///   Vector Observation Space Size = 15
 ///   Stacked Vectors               = 4
-///   Continuous Actions            = 3   (leftTrack, rightTrack, camera_servo)
+///   Continuous Actions            = 3   (gas [-1..1], steering [-1..1], camera_yaw_target [-1..1])
 ///   Discrete Branches             = 1, размер ветки = 3  (0 = idle, 1 = grab, 2 = release)
 ///
 /// Важно: на TrackController, которым управляет этот агент, useManualInput должен
@@ -47,6 +47,7 @@ public class RobotBrain : Agent
              "диапазон камеры не создаёт лазейки 'стою и просто верчу камерой'.")]
     public float cameraServoMaxAngle = 90f;
     [Tooltip("Скорость поворота сервопривода (град/сек) при полном сигнале")]
+    [System.Obsolete("Не используется с action space Gas/Steering. Скорость камеры теперь задаётся через MAX_CAMERA_STEP_NORMALIZED в OnActionReceived.")]
     public float cameraServoSpeedDegPerSec = 90f;
 
     [Header("Границы арены (терминал 'вылетел')")]
@@ -70,21 +71,37 @@ public class RobotBrain : Agent
     [Tooltip("Штраф за критически близкую стену (по ИК/УЗ). За 500 шагов у стены = -1 к эпизоду.")]
     public float wallProximityPenalty   = 0.002f;
 
-    [Tooltip("Штраф за асимметрию гусениц при движении ВПЕРЁД — нужен чтобы робот не ехал зигзагом. " +
-             "Активен только когда обе гусеницы жмут вперёд (иначе повороты бы наказывались). " +
-             "Формула: max(0, |leftTrack - rightTrack| - deadzone) × max(0, (leftTrack+rightTrack)/2) × penalty.")]
-    public float wobbleAsymmetryPenalty = 0.01f;
-    [Tooltip("Толерантность к малой асимметрии — не штрафуем |left-right| < wobbleAsymmetryDeadzone. " +
-             "Нужно чтобы модель могла свободно КОМПЕНСИРОВАТЬ разные leftSpeedMul/rightSpeedMul и ехать прямо " +
-             "без штрафа. Ставь ≈ разброса моторов (0.15 если motorSpeedMul гуляет 0.85..1.15).")]
-    public float wobbleAsymmetryDeadzone = 0.15f;
-
-    [Tooltip("Штраф за смену знака поворота между шагами (влево-вправо-влево). " +
-             "Реальный робот не может так быстро менять направление вращения. " +
-             "Если (leftTrack-rightTrack) сменил знак — штраф.")]
-    public float steerFlipPenalty = 0.02f;
-    [Tooltip("Терминальный бонус за успешный захват мяча")]
+    // wobbleAsymmetryPenalty и steerFlipPenalty удалены — они были нужны, чтобы модель,
+    // управляющая напрямую left/right, не ездила зигзагом. С Gas/Steering раскладкой в
+    // Controller.Move() симметрия обеспечивается автоматически: gas=1, steer=0 → left=right,
+    // а зигзаг стал невозможен на уровне action space.
+    [Tooltip("Терминальный бонус за успешный захват мяча — начисляется когда мяч удержан holdStepsRequired шагов подряд")]
     public float grabSuccessReward      = 5.0f;
+
+    [Header("Hold-to-succeed — надо ПРОДЕРЖАТЬ мяч N шагов")]
+    [Tooltip("Сколько decisions подряд мяч должен быть в клешне до срабатывания терминала +grabSuccessReward. " +
+             "50 при DecisionPeriod=5 ≈ 1 секунда симуляции. Учит крепкому захвату, не 'брифовому касанию'.")]
+    public int holdStepsRequired = 50;
+    [Tooltip("Непрерывная награда за каждый шаг удержания мяча (до срабатывания терминала). " +
+             "0.02 × 50 = +1.0 суммарно к моменту победы, плюс +5 терминал.")]
+    public float holdStepReward = 0.02f;
+
+    [Header("Blind approach — движение вперёд когда мяч НЕ виден")]
+    [Tooltip("Бонус за каждый шаг, когда робот едет вперёд, но мяч ещё не виден. " +
+             "Стимулирует активный поиск, а не стояние на месте при потере мяча.")]
+    public float blindApproachBonus = 0.003f;
+    [Tooltip("Минимальная реальная скорость вперёд (м/с) для срабатывания blindApproachBonus")]
+    public float blindApproachMinForwardSpeed = 0.05f;
+
+    [Header("Точность подъезда к мячу (slow-down + speed penalty near ball)")]
+    [Tooltip("Дистанция до мяча (м), ниже которой начинают действовать награды/штрафы за скорость")]
+    public float precisionApproachDistance = 0.5f;
+    [Tooltip("Порог 'медленно' (м/с). Если скорость ниже — начисляется slowdownBonus.")]
+    public float precisionSlowdownSpeed = 0.15f;
+    [Tooltip("Бонус за замедление возле мяча (плавный точный подъезд)")]
+    public float precisionSlowdownBonus = 0.005f;
+    [Tooltip("Штраф за быструю езду возле мяча (пролетает мимо, не может ухватить)")]
+    public float precisionOverspeedPenalty = 0.01f;
     [Tooltip("Терминальный штраф за вылет за пределы арены")]
     // [Tooltip("Модуль штрафа за вылет за арену. Минус в коде: AddReward(-outOfArenaPenalty).")]
     public float outOfArenaPenalty      = 2.0f;
@@ -157,13 +174,19 @@ public class RobotBrain : Agent
     public float robotMassMin = 0.8f;
     public float robotMassMax = 1.5f;
 
-    [Header("Рандомизация моторов (асимметрия и потолок скорости)")]
-    [Tooltip("Разброс множителя скорости для каждой гусеницы в эпизоде. " +
-             "0.85..1.15 = левый/правый борт могут отличаться до ±15%. " +
-             "Эмулирует разное состояние редукторов.")]
+    [Header("Рандомизация моторов (реалистичная модель: общий фактор + per-side джиттер)")]
+    [Tooltip("Включить рандомизацию моторов")]
     public bool  randomizeMotors        = true;
-    public float motorSpeedMulMin       = 0.85f;
-    public float motorSpeedMulMax       = 1.15f;
+    [Tooltip("ОБЩИЙ множитель обеих гусениц за эпизод. Эмулирует уровень заряда АКБ / общий износ. " +
+             "Оба мотора получают ОДНО значение из этого диапазона (не независимо). " +
+             "0.85..1.15 = заряд от почти-разряженного до свежего.")]
+    public float motorCommonMulMin      = 0.85f;
+    public float motorCommonMulMax      = 1.15f;
+    [Tooltip("Малый ПЕР-СТОРОННИЙ джиттер, добавляемый к каждой гусенице отдельно. " +
+             "Эмулирует производственный допуск и небольшой износ редукторов. " +
+             "±0.02 = максимум 2% разницы между L и R. Реалистично.")]
+    [Range(0f, 0.10f)]
+    public float motorPerSideJitter     = 0.02f;
     [Tooltip("Разброс максимальной скорости робота (maxLinearCmd), м/сек. " +
              "0.6..1.0 = более-менее сильный/слабый АКБ или трение.")]
     public float robotMaxSpeedMin       = 0.6f;
@@ -210,8 +233,12 @@ public class RobotBrain : Agent
 
     private float _cameraServoAngle       = 0f;
     private float _prevDistanceToBall     = -1f;
-    private float _prevLeft               = 0f;
-    private float _prevRight              = 0f;
+    private float _prevGas                = 0f;
+    private float _prevSteer              = 0f;
+    private float _prevCam                = 0f;
+    private float _currentCameraYaw       = 0f;  // -1..1, абсолютное состояние камеры с rate-limit
+    private float _smoothedCamTarget      = 0f;  // EMA-сглаженный target от сети — глушит шум
+    private int   _gripHoldSteps          = 0;   // сколько decisions подряд робот держит свой мяч
     private float _timeSinceLastDetection = 0f;
     private float _lastKnownBallDirection = 0f;
     private int   _episodeStepCount       = 0;
@@ -398,7 +425,7 @@ public class RobotBrain : Agent
             _rb.mass = Mathf.Max(0.001f, robotMass); // Ensure mass is not zero or negative
         }
 
-        if (tracks != null) tracks.SetTrackInputs(0f, 0f);
+        if (tracks != null) tracks.Move(0f, 0f);
 
         // 5. Ставим мяч + рандомизируем массу
         if (targetBall != null)
@@ -431,9 +458,15 @@ public class RobotBrain : Agent
 
         if (randomizeMotors && tracks != null)
         {
-            // Асимметрия левого/правого борта — эмулирует разный износ редукторов
-            tracks.leftSpeedMul  = Random.Range(motorSpeedMulMin, motorSpeedMulMax);
-            tracks.rightSpeedMul = Random.Range(motorSpeedMulMin, motorSpeedMulMax);
+            // Реалистичная модель мотора: общий фактор (АКБ) + малый per-side джиттер (допуск).
+            // Оба мотора питаются от одного источника — их скорости коррелированы.
+            // Раньше независимая рандомизация давала асимметрию до ±30%, из-за чего робот
+            // при спавне сразу тянуло сильно вбок — источник дрыганья на прямой езде.
+            float commonMul   = Random.Range(motorCommonMulMin, motorCommonMulMax);
+            float leftJitter  = Random.Range(-motorPerSideJitter, motorPerSideJitter);
+            float rightJitter = Random.Range(-motorPerSideJitter, motorPerSideJitter);
+            tracks.leftSpeedMul  = commonMul * (1f + leftJitter);
+            tracks.rightSpeedMul = commonMul * (1f + rightJitter);
 
             // Максимальная скорость робота — эмулирует АКБ или трение
             tracks.maxLinearCmd = Mathf.Max(0.05f, Random.Range(robotMaxSpeedMin, robotMaxSpeedMax));
@@ -449,8 +482,12 @@ public class RobotBrain : Agent
 
         // Служебные переменные наград
         _prevDistanceToBall     = DistanceToBall();
-        _prevLeft                = 0f;
-        _prevRight               = 0f;
+        _prevGas                = 0f;
+        _prevSteer              = 0f;
+        _prevCam                = 0f;
+        _currentCameraYaw       = 0f;
+        _smoothedCamTarget      = 0f;
+        _gripHoldSteps          = 0;
         _timeSinceLastDetection = 0f;
         _lastKnownBallDirection = 0f;
         _episodeStepCount       = 0;
@@ -564,35 +601,59 @@ public class RobotBrain : Agent
             return;
         }
 
-        // Считываем свежие сигналы от сети
-        float freshLeft  = Mathf.Clamp(actions.ContinuousActions[0], -1f, 1f);
-        float freshRight = Mathf.Clamp(actions.ContinuousActions[1], -1f, 1f);
+        // Считываем свежие сигналы от сети.
+        //   ContinuousActions[0] = gas             ∈ [-1..1]  (вперёд / назад)
+        //   ContinuousActions[1] = steering        ∈ [-1..1]  (влево / вправо)
+        //   ContinuousActions[2] = camera yaw TARGET ∈ [-1..1] (нормализованный угол камеры)
+        float freshGas   = Mathf.Clamp(actions.ContinuousActions[0], -1f, 1f);
+        float freshSteer = Mathf.Clamp(actions.ContinuousActions[1], -1f, 1f);
         float freshCam   = Mathf.Clamp(actions.ContinuousActions[2], -1f, 1f);
         int   gripAct    = actions.DiscreteActions[0]; // 0 = idle, 1 = grab, 2 = release
 
         // Пропускаем непрерывные сигналы через FIFO-буфер задержки — эмулируем
-        // латентность ROS2/сети/моторов. Кладём свежее в хвост, забираем самое
-        // старое из головы. Дискретный gripAct не задерживаем — команды клешне
-        // на реальном роботе идут отдельным каналом и обычно быстрее.
-        actionBuffer.Enqueue(new float[] { freshLeft, freshRight, freshCam });
+        // латентность ROS2/сети/моторов. Дискретный gripAct не задерживаем.
+        actionBuffer.Enqueue(new float[] { freshGas, freshSteer, freshCam });
         float[] delayed = actionBuffer.Count > 0
             ? actionBuffer.Dequeue()
             : new float[] { 0f, 0f, 0f };
 
-        float leftTrack  = delayed[0];
-        float rightTrack = delayed[1];
-        float camSignal  = delayed[2];
+        float gas     = delayed[0];
+        float steer   = delayed[1];
+        float camTarget = delayed[2];
 
-        // 1. Движение — прокидываем в TrackController напрямую по двум гусеницам
+        // 1. Движение — Gas + Steering, TrackController раскладывает в L/R по turnK.
+        //    Совместимо с ROS /cmd_vel (linear.x = gas, angular.z = steer).
         if (tracks != null)
         {
-            tracks.SetTrackInputs(leftTrack, rightTrack);
+            tracks.Move(gas, steer);
         }
 
-        // 2. Сервопривод камеры (интегрируем сигнал в угол)
-        _cameraServoAngle = Mathf.Clamp(
-            _cameraServoAngle + camSignal * cameraServoSpeedDegPerSec * Time.deltaTime,
-            -cameraServoMaxAngle, cameraServoMaxAngle);
+        // 2. Сервопривод камеры — абсолютный target с ТРЕМЯ уровнями сглаживания:
+        //    (a) EMA-фильтр самого target'а — глушит высокочастотный шум сети;
+        //    (b) deadband на дельту — не двигаемся к target'у если он "почти на месте";
+        //    (c) rate-limit MAX_CAMERA_STEP_NORMALIZED — физический предел сервомотора.
+        //    Без (a) и (b) камера дрожит: любой шумный target=±0.05 → камера двигается
+        //    на 15° туда-сюда каждое решение.
+        const float MAX_CAMERA_STEP_NORMALIZED = 15f / 90f;   // ≈ 0.167
+        const float CAM_TARGET_EMA_ALPHA       = 0.3f;         // 0.3 = сильное сглаживание
+        const float CAM_TARGET_DEADBAND        = 0.03f;        // ~2.7°: игнорируем малые изменения
+
+        // Страховка от NaN — если что-то дало Infinity, не портим состояние
+        if (float.IsNaN(camTarget) || float.IsInfinity(camTarget)) camTarget = _currentCameraYaw;
+
+        // (a) EMA сглаживание — свежий target смешивается со старым
+        _smoothedCamTarget = (1f - CAM_TARGET_EMA_ALPHA) * _smoothedCamTarget
+                             + CAM_TARGET_EMA_ALPHA * camTarget;
+
+        // (b) Deadband: если сглаженный target почти совпадает с текущим положением — стоим
+        float camDelta = _smoothedCamTarget - _currentCameraYaw;
+        if (Mathf.Abs(camDelta) < CAM_TARGET_DEADBAND) camDelta = 0f;
+
+        // (c) Rate-limit: физический предел скорости сервомотора
+        camDelta = Mathf.Clamp(camDelta, -MAX_CAMERA_STEP_NORMALIZED, MAX_CAMERA_STEP_NORMALIZED);
+
+        _currentCameraYaw = Mathf.Clamp(_currentCameraYaw + camDelta, -1f, 1f);
+        _cameraServoAngle = _currentCameraYaw * cameraServoMaxAngle;
         if (cameraServo != null)
             cameraServo.localRotation = Quaternion.Euler(0f, _cameraServoAngle, 0f);
 
@@ -625,13 +686,14 @@ public class RobotBrain : Agent
         _prevPosition = currentPosition;
 
         // 5. Награды
-        ComputeRewards(leftTrack, rightTrack, gripAct);
+        ComputeRewards(gas, steer, camTarget, gripAct);
 
-        _prevLeft  = leftTrack;
-        _prevRight = rightTrack;
+        _prevGas   = gas;
+        _prevSteer = steer;
+        _prevCam   = camTarget;
     }
 
-    void ComputeRewards(float leftTrack, float rightTrack, int gripAct)
+    void ComputeRewards(float gas, float steer, float camTarget, int gripAct)
     {
         // Кадровые счётчики для метрик — считаем эффективную видимость,
         // чтобы Custom/BallVisibleFraction отражал реальный сигнал, доходящий до модели.
@@ -652,35 +714,16 @@ public class RobotBrain : Agent
         }
         _prevDistanceToBall = curDist;
 
-        // б) Штраф за резкость управления
-        float dLeft  = Mathf.Abs(leftTrack  - _prevLeft);
-        float dRight = Mathf.Abs(rightTrack - _prevRight);
-        float rAct = -(dLeft + dRight) * actionRatePenalty;
+        // б) Единый квадратичный штраф за резкость управления (как в референсе).
+        //    Формула: -actionRatePenalty × (Δgas² + Δsteer² + Δcam²).
+        //    Заменяет прежние три штрафа (rate + wobble + flip) — с action space
+        //    (gas, steering) зигзаг физически невозможен, отдельные штрафы избыточны.
+        float dGas   = gas       - _prevGas;
+        float dSteer = steer     - _prevSteer;
+        float dCam   = camTarget - _prevCam;
+        float actionRateSq = dGas * dGas + dSteer * dSteer + dCam * dCam;
+        float rAct = -actionRatePenalty * actionRateSq;
         AddReward(rAct); _rewardAction += rAct;
-
-        // б.1) Штраф за "зигзаг" — асимметрия гусениц при попытке ехать вперёд.
-        //      Активен только когда обе гусеницы жмут вперёд (разворот на месте НЕ штрафуется).
-        //      Плюс — малая асимметрия (в пределах wobbleAsymmetryDeadzone) не штрафуется,
-        //      чтобы модель могла компенсировать разные leftSpeedMul/rightSpeedMul.
-        float forwardness = Mathf.Max(0f, (leftTrack + rightTrack) * 0.5f);
-        float asymmetryRaw = Mathf.Abs(leftTrack - rightTrack);
-        float asymmetry    = Mathf.Max(0f, asymmetryRaw - wobbleAsymmetryDeadzone);
-        float rWobble = -asymmetry * forwardness * wobbleAsymmetryPenalty;
-        AddReward(rWobble); _rewardAction += rWobble;
-
-        // б.2) Штраф за смену знака поворота между шагами.
-        //      Если робот кидался "лево-право-лево" — это невозможно на реальном
-        //      роботе (моторы + инерция), плюс это визуально зигзаг.
-        float curSteer  = leftTrack - rightTrack;
-        float prevSteer = _prevLeft - _prevRight;
-        bool signFlipped = (curSteer * prevSteer < 0f)
-                           && (Mathf.Abs(curSteer) > 0.1f)
-                           && (Mathf.Abs(prevSteer) > 0.1f);
-        if (signFlipped)
-        {
-            float rFlip = -steerFlipPenalty;
-            AddReward(rFlip); _rewardAction += rFlip;
-        }
 
         // в) Две отдельные, но связанные награды за работу с камерой/корпусом:
         //
@@ -728,9 +771,35 @@ public class RobotBrain : Agent
         float forwardSpeed = Vector3.Dot(_lastVelocity, transform.forward);
         if (forwardSpeed < -backwardMovementDeadzone)
         {
-            // forwardSpeed < 0 (робот пятится) → штраф пропорционален величине заднего хода.
-            // Явный минус в стиле A: magnitude × penalty, минус применяется вручную.
             AddReward(-Mathf.Abs(forwardSpeed) * backwardMovementPenalty);
+        }
+
+        // е.1) BLIND APPROACH — бонус за движение вперёд когда мяч НЕ виден.
+        //      Без этого робот на старте (пока не научился крутиться и искать) просто стоит
+        //      и копит per-step penalty. Тут стимулируем ехать вперёд в поиске.
+        if (!ballVisible && forwardSpeed > blindApproachMinForwardSpeed)
+        {
+            AddReward(blindApproachBonus);
+            _rewardCenter += blindApproachBonus;  // логируем как part of "center/search" cluster
+        }
+
+        // е.2) PRECISION APPROACH — награды/штрафы за скорость при близости к мячу.
+        //      Далеко от мяча — скорость не важна (даже нужна для эффективного подъезда).
+        //      Близко — надо замедлиться, иначе робот пролетает мимо, не может ухватить.
+        //      Симметричная пара: замедлился рядом = бонус, летит рядом = штраф.
+        if (curDist > 0f && curDist < precisionApproachDistance)
+        {
+            float speedMag = Mathf.Abs(forwardSpeed);
+            if (speedMag < precisionSlowdownSpeed)
+            {
+                AddReward(precisionSlowdownBonus);
+                _rewardDistance += precisionSlowdownBonus;  // группируем к distance-семье
+            }
+            else
+            {
+                AddReward(-precisionOverspeedPenalty);
+                _rewardDistance -= precisionOverspeedPenalty;
+            }
         }
 
         // з) Штраф за ложный захват — команда grab, когда мяч не подтверждён рядом с клешнёй.
@@ -744,37 +813,48 @@ public class RobotBrain : Agent
             }
         }
 
-        // к) Терминал: успешный захват — с верификацией что схвачен ИМЕННО свой мяч.
-        //    Это критично для мульти-арены: gripper.FindBallNearHoldPoint использует
-        //    Physics.OverlapSphere с маской ~0 и матчит по тегу TargetBall — может
-        //    физически захватить мяч из соседней арены и триггернуть ложный success.
+        // к) Hold-to-succeed: удержание своего мяча N шагов подряд → терминал +grabSuccessReward.
+        //    Пока держит — капает holdStepReward. Отпустил / потерял — счётчик обнуляется.
+        //    Верифицируем что схвачен ИМЕННО свой мяч (см. защиту от мульти-арены).
         if (gripper != null && gripper.isHolding)
         {
             bool ownBall = true;
             if (targetBall != null && gripper.HeldRigidbody != null)
-            {
                 ownBall = (gripper.HeldRigidbody.transform == targetBall);
-            }
 
             if (ownBall)
             {
-                AddReward(grabSuccessReward);
-                _rewardTerminal += grabSuccessReward;
-                LogEpisodeStats(success: true);
-                EndEpisode();
-                return;
+                _gripHoldSteps++;
+
+                // Continuous hold reward — стимулирует держать, а не хватать-бросать
+                AddReward(holdStepReward);
+                _rewardTerminal += holdStepReward;
+
+                // Терминал только после N шагов удержания
+                if (_gripHoldSteps >= holdStepsRequired)
+                {
+                    AddReward(grabSuccessReward);
+                    _rewardTerminal += grabSuccessReward;
+                    LogEpisodeStats(success: true);
+                    EndEpisode();
+                    return;
+                }
             }
             else
             {
-                // Схвачен ЧУЖОЙ мяч — это баг мульти-арены. Отпускаем силой, штрафуем,
-                // не завершаем эпизод. Пишем warning чтобы было видно в логах.
+                // Захвачен ЧУЖОЙ мяч (мульти-арена баг) — отпускаем, штрафуем, не терминал.
                 Debug.LogWarning($"[{name}] Захвачен ЧУЖОЙ мяч '{gripper.HeldRigidbody.name}' " +
-                                 $"(мой targetBall = '{targetBall.name}'). Отпускаю. " +
-                                 $"Проверь ссылки в префабе или разнеси арены.");
+                                 $"(мой targetBall = '{targetBall.name}'). Отпускаю.");
                 gripper.Release();
                 gripper.grabCommand = false;
                 AddReward(-falseGrabPenalty);
+                _gripHoldSteps = 0;
             }
+        }
+        else
+        {
+            // Не держит — сброс счётчика удержания
+            _gripHoldSteps = 0;
         }
 
         // л) Терминал: вылет за арену.
@@ -857,24 +937,27 @@ public class RobotBrain : Agent
         var cont = actionsOut.ContinuousActions;
         var disc = actionsOut.DiscreteActions;
 
-        float left = 0f, right = 0f, c = 0f;
+        float gas = 0f, steer = 0f, camTarget = 0f;
         int   g = 0;
 
         var kb = Keyboard.current;
         if (kb != null)
         {
-            // Те же клавиши, что и дефолт TrackController: W/S — левая, E/D — правая
-            left  = kb.wKey.ReadValue() - kb.sKey.ReadValue();
-            right = kb.eKey.ReadValue() - kb.dKey.ReadValue();
-            // Камера перенесена на I/K, чтобы не конфликтовать с E/D (правая гусеница)
-            c = kb.iKey.ReadValue() - kb.kKey.ReadValue();
-            if      (kb.spaceKey.isPressed) g = 1;             // grab
-            else if (kb.xKey.isPressed)     g = 2;             // release
+            // WASD — драйверские команды (как в референсе):
+            //   W/S — газ (вперёд/назад)
+            //   A/D — руль (влево/вправо)
+            //   I/K — камера yaw target: вверх/вниз в [-1..1]
+            //   Space — grab, X — release
+            gas   = kb.wKey.ReadValue() - kb.sKey.ReadValue();
+            steer = kb.dKey.ReadValue() - kb.aKey.ReadValue();
+            camTarget = kb.iKey.ReadValue() - kb.kKey.ReadValue();
+            if      (kb.spaceKey.isPressed) g = 1;
+            else if (kb.xKey.isPressed)     g = 2;
         }
 
-        cont[0] = left;
-        cont[1] = right;
-        cont[2] = c;
+        cont[0] = gas;
+        cont[1] = steer;
+        cont[2] = camTarget;
         disc[0] = g;
     }
 

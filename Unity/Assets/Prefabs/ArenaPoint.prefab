@@ -2327,14 +2327,12 @@ MonoBehaviour:
   closeDistanceBonusMul: 3
   actionRatePenalty: 0.001
   wallProximityPenalty: 0.015
-  wobbleAsymmetryPenalty: 0.01
-  steerFlipPenalty: 0.02
   grabSuccessReward: 5
   outOfArenaPenalty: 2
   perStepPenalty: 0.001
   backwardMovementPenalty: 0.01
   backwardMovementDeadzone: 0.01
-  centeringBonus: 0.01
+  centeringBonus: 0.03
   bodyCameraAlignmentBonus: 0
   bodyCameraAlignmentToleranceDeg: 3
   falseGrabPenalty: 0
@@ -2354,8 +2352,9 @@ MonoBehaviour:
   robotMassMin: 0.8
   robotMassMax: 1.5
   randomizeMotors: 1
-  motorSpeedMulMin: 0.85
-  motorSpeedMulMax: 1.15
+  motorCommonMulMin: 0.85
+  motorCommonMulMax: 1.15
+  motorPerSideJitter: 0.02
   robotMaxSpeedMin: 0.6
   robotMaxSpeedMax: 1
   motorPwmStepMin: 10
@@ -2435,6 +2434,7 @@ MonoBehaviour:
   rightTrackPoint: {fileID: 702169120509895248}
   maxLinearCmd: 2
   maxAngularSpeedDeg: 200
+  turnK: 0.3
   motorDeadzone: 10
   minMotorPwm: 35
   maxPwmStep: 15

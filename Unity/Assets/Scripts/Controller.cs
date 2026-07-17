@@ -30,6 +30,15 @@ public class Controller : MonoBehaviour
             "Не даёт роботу улетать в нереалистичное вращение даже при ошибке в геометрии.")]
     public float maxAngularSpeedDeg = 200f;
 
+    [Header("Дифференциальный привод — gas/steering декомпозиция")]
+    [Tooltip("Коэффициент смешивания руля со скоростью гусениц. При Move(gas=1, steer=1): " +
+             "leftInput = 1 + 1×turnK, rightInput = 1 - 1×turnK. " +
+             "0.3 — умеренный поворот, гусеницы разной скорости но обе едут вперёд. " +
+             "1.0 — жёсткий поворот, одна гусеница стоит. " +
+             "Влияет только на Move(gas, steering); SetTrackInputs напрямую не задействует.")]
+    [Range(0.1f, 1.5f)]
+    public float turnK = 0.30f;
+
     [Header("Параметры PWM (эмуляция реального мотора)")]
     public float motorDeadzone = 10f;
     public float minMotorPwm = 35f;
@@ -75,6 +84,23 @@ public class Controller : MonoBehaviour
         rightInput = Mathf.Clamp(right, -1f, 1f);
     }
 
+    /// <summary>
+    /// Основной интерфейс для нейронки: газ (вперёд/назад) + руль (влево/вправо).
+    /// Внутри раскладывается в leftInput/rightInput по формуле дифференциального привода.
+    /// Совместимо с ROS /cmd_vel (Twist) — linear.x = gas, angular.z = steering.
+    /// </summary>
+    public void Move(float gas, float steering)
+    {
+        gas      = Mathf.Clamp(gas,      -1f, 1f);
+        steering = Mathf.Clamp(steering, -1f, 1f);
+
+        float left  = gas + steering * turnK;
+        float right = gas - steering * turnK;
+
+        // clamp итоговых значений — сумма gas + steering×turnK может выйти за ±1
+        SetTrackInputs(left, right);
+    }
+
     void Update()
     {
         if (!useManualInput) return;
@@ -82,15 +108,11 @@ public class Controller : MonoBehaviour
         var kb = Keyboard.current;
         if (kb == null) return;
 
-        float left = 0f;
-        if (kb[leftForwardKey].isPressed) left += 1f;
-        if (kb[leftBackwardKey].isPressed) left -= 1f;
-
-        float right = 0f;
-        if (kb[rightForwardKey].isPressed) right += 1f;
-        if (kb[rightBackwardKey].isPressed) right -= 1f;
-
-        SetTrackInputs(left, right);
+        // WASD как gas + steer: W/S — газ, A/D — руль. Именно так работает Heuristic
+        // ML-Agents в новом Move(gas, steering) режиме.
+        float gas   = kb.wKey.ReadValue() - kb.sKey.ReadValue();
+        float steer = kb.dKey.ReadValue() - kb.aKey.ReadValue();
+        Move(gas, steer);
     }
 
     void FixedUpdate()
