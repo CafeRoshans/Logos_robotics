@@ -2159,6 +2159,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3657878881065950151}
+    - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4827791581018501935}
+    - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6364411629071752895}
     - targetCorrespondingSourceObject: {fileID: 9127662211880319232, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1081570319156500118}
@@ -2314,11 +2320,15 @@ MonoBehaviour:
   tracks: {fileID: 3657878881065950151}
   gripper: {fileID: 1081570319156500118}
   sensors: {fileID: 434451357782293778}
-  yolo: {fileID: 7678926751972867306}
+  yolo: {fileID: 4827791581018501935}
   cameraServo: {fileID: 7170547908202784088}
   targetBall: {fileID: 2662588395027316777}
   obstacleSpawner: {fileID: 401300216358652757}
+  rosBridge: {fileID: 0}
   cameraServoMaxAngle: 90
+  cameraMaxStepDeg: 8
+  cameraTargetEmaAlpha: 0.15
+  cameraTargetDeadband: 0.05
   cameraServoSpeedDegPerSec: 90
   arenaCenterOffset: {x: 0, y: 0, z: 2.9}
   arenaHalfSize: {x: 1.42, y: 1, z: 3.25}
@@ -2461,6 +2471,41 @@ MonoBehaviour:
   rightInput: 0
   leftSpeedMul: 1
   rightSpeedMul: 1
+--- !u!114 &4827791581018501935
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1710318917514631624}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ea01b3d449214532aa06860fd4f1080, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RealVision
+  udpPort: 5005
+  useYOLO: 0
+  normalizedAngle: 0
+  normalizedDistance: 0
+  seesBall: 0
+  isVisible: 0
+  horizontalAngle: 0
+--- !u!114 &6364411629071752895
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1710318917514631624}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28a30065e94944db28cfc39230069a05, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ROSBridge
+  topicName: /cmd_vel
+  maxLinearSpeed: 0.5
+  maxAngularSpeed: 1
+  emaAlpha: 0.8
 --- !u!1 &3368425570599177975 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1434554889793086441, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}

@@ -138,6 +138,13 @@ public class GripperController : MonoBehaviour
         ball.transform.localPosition = Vector3.zero;
         ball.transform.localRotation = Quaternion.identity;
 
+
+        // Попытка схватить мяч н 1
+        // if (rosBridge != null)
+        // {
+        //     rosBridge.PublishGripperCmd(2); // Отправить команду закрытия в ROS
+        // }
+
         isHolding = true;
     }
 

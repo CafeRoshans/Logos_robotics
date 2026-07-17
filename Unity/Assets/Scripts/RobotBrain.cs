@@ -30,7 +30,7 @@ public class RobotBrain : Agent
     public Controller tracks;
     public GripperController gripper;
     public VirtualSensors sensors;
-    public SimulatedYoloCamera yolo;
+    public RealVision yolo;
     [Tooltip("Transform, вокруг Y которого крутится камера (сервопривод). Может быть родителем самой камеры.")]
     public Transform cameraServo;
     [Tooltip("Мяч, за которым робот охотится")]
@@ -38,6 +38,8 @@ public class RobotBrain : Agent
     [Tooltip("Спавнер препятствий на этой арене. Если задан — на каждый OnEpisodeBegin " +
              "будет вызван Respawn() и препятствия перераскладываются случайно.")]
     public ObstacleSpawner obstacleSpawner;
+
+    public ROSBridge rosBridge;
 
     [Header("Сервопривод камеры")]
     [Tooltip("Максимальный угол отклонения камеры ± (градусы). Камера свободно осматривается в " +
@@ -324,6 +326,8 @@ public class RobotBrain : Agent
     private Queue<float[]> sensorBuffer = new Queue<float[]>();
     private float[] _delayedSensors = new float[4] { 1f, 0f, 0f, 0f };
     private int currentActionLatency = 5; 
+
+    
 
 
     public override void Initialize()
@@ -757,6 +761,11 @@ public class RobotBrain : Agent
                 // Автоматический режим (как в референсе): grabCommand всегда true.
                 // GripperController.CanGrab() сам решит хватать по IR-датчику клешни.
                 gripper.grabCommand = true;
+                // При срабатывании захвата мяча:
+                if (rosBridge != null)
+                {
+                    rosBridge.PublishGripperCmd(2); // Отправить команду закрытия в ROS
+                }
             }
             else
             {
@@ -785,6 +794,12 @@ public class RobotBrain : Agent
         float dt = Mathf.Max(Time.deltaTime, 0.0001f); // защита от деления на 0
         _lastVelocity = (currentPosition - _prevPosition) / dt;
         _prevPosition = currentPosition;
+
+        // if (rosBridge != null)
+        // {
+        //     rosBridge.PublishCommand(gas, steering);
+        //     rosBridge.PublishCameraCmd(cameraYawInput);
+        // }
 
         // 5. Награды
         ComputeRewards(gas, steer, camTarget, gripAct);
