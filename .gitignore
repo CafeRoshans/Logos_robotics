@@ -12,6 +12,8 @@ Unity/*.log
 Unity/[Mm]emoryCaptures/
 Unity/[Rr]ecordings/
 
+# ML-Agents автогенерируемые тайминги — шумят в diff'ах
+Unity/[Aa]ssets/ML-Agents/Timers/
 .DS_Store
 video_runs/
 .vscode/
@@ -56,8 +58,18 @@ mono_crash.*
 crashlytics-build.properties
 InitTestScene*.unity*
 
+.DS_Store
+.vscode/
 # Visual Scripting auto-generated files
 Unity/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
 Unity/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db.meta
 Unity/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers
 Unity/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers.meta
+Unity/Assets/ML-Agents/Timers/SampleScene_timers.json
+Unity/results/
+results/
+Unity/Assets/Models/
+**/*.log
+
+Build/
+*.zip
