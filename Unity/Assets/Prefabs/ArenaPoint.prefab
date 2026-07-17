@@ -2337,7 +2337,7 @@ MonoBehaviour:
   distanceRewardAlpha: 2
   closeRadius: 0.35
   driveRatePenalty: 0.001
-  cameraRatePenalty: 0.005
+  cameraRatePenalty: 0.008
   wallProximityPenalty: 0.015
   timeoutPenalty: 0.5
   obstacleTag: Obstacle
@@ -2346,7 +2346,7 @@ MonoBehaviour:
   grabSuccessReward: 5
   blindApproachBonus: 0.003
   blindApproachMinForwardSpeed: 0.05
-  ultrasonicNoise: 0.05
+  ultrasonicNoise: 0.07
   visionAngleNoise: 0.03
   visionDistanceNoise: 0.09
   sensorLatencySteps: 3
@@ -2365,9 +2365,8 @@ MonoBehaviour:
   centeringStreakCap: 30
   centeringAngleThreshold: 0.25
   centeringMinMovement: 0.03
-  bodyCameraAlignmentBonus: 0
-  bodyCameraAlignmentToleranceDeg: 3
-  falseGrabPenalty: 0
+  bodyCameraAlignmentBonus: 0.04
+  bodyCameraAlignmentToleranceDeg: 4
   grabProximityIRThreshold: 0.5
   randomizeSpawnPositions: 1
   minRobotBallDistance: 0.6

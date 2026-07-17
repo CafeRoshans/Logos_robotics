@@ -201,9 +201,6 @@ public class RobotBrain : Agent
     public float bodyCameraAlignmentToleranceDeg = 3f;
 
 
-    [Header("Штраф за ложный захват")]
-    [Tooltip("Штраф за команду grab, когда мяч не рядом с клешнёй")]
-    public float falseGrabPenalty = 0.01f;
     [Tooltip("Порог ИК клешни, выше которого считаем, что мяч действительно рядом")]
     public float grabProximityIRThreshold = 0.5f;
 
@@ -963,18 +960,6 @@ public class RobotBrain : Agent
             }
         }
 
-        // з) Штраф за ложный захват — только в legacy-режиме (когда сеть управляет клешнёй).
-        //    При useAutomaticGripper = true спамить grab невозможно (grabCommand всегда true,
-        //    но реальный grab — только когда датчик клешни видит мяч).
-        if (!useAutomaticGripper && gripAct == 1 && (gripper == null || !gripper.isHolding))
-        {
-            bool ballNear = sensors != null && (float)sensors.gripperIR > grabProximityIRThreshold;
-            if (!ballNear)
-            {
-                AddReward(-falseGrabPenalty);
-            }
-        }
-
         // к) Терминал при захвате своего мяча.
         //    Верифицируем что схвачен ИМЕННО свой мяч (защита от мульти-арены).
         if (gripper != null && gripper.isHolding)
@@ -998,7 +983,6 @@ public class RobotBrain : Agent
                                  $"(мой targetBall = '{targetBall.name}'). Отпускаю.");
                 gripper.Release();
                 gripper.grabCommand = false;
-                AddReward(-falseGrabPenalty);
             }
         }
 
