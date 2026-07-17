@@ -12,6 +12,12 @@ Unity/*.log
 Unity/[Mm]emoryCaptures/
 Unity/[Rr]ecordings/
 
+.DS_Store
+video_runs/
+.vscode/
+Build/build.log
+Unity/results/
+
 # --- ФАЙЛЫ И ПАПКИ, КОТОРЫЕ НУЖНО КОММИТИТЬ (ProjectSettings, Assets, Packages) ---
 # Они не указаны здесь, поэтому Git добавит их по умолчанию. 
 # Но мы явно разрешаем папку настроек, на всякий случай:
