@@ -17,3 +17,24 @@ gfsx_20260716_140735
 
 
 попробовать 4. Behavior Cloning (BC) + RL Fine-tuning
+
+
+1) добавить они добавляют шум прямо в CollectObservations
+
+УЗ: sensor.AddObservation(ultrasonicDist + Random(-0.05, 0.05))
+Vision angle: + Random(-noiseAmp, noiseAmp) где noiseAmp читается из environment_parameters.vision_noise
+Vision distance: + Random(-noiseAmp*3, noiseAmp*3) (в 3× большая амплитуда для дистанции)
+
+2) убрать grabbing без discrete
+3 continuous, без discrete
+Gas [-1..1]
+Steering [-1..1]
+CameraYaw [-1..1]
+Gripper управляется ПРОГРАММНО, не сетью. Их GripperController закрывается автоматически когда gripperIR = 1.
+
+Наш: 3 continuous + 1 discrete
+Gas, Steering, CameraYaw
+DiscreteActions[0] = 0/1/2 → grab/release решение сети
+
+
+gfsx_20260717_101159/GFSX_Brain

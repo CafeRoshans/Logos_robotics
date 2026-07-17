@@ -2158,7 +2158,7 @@ PrefabInstance:
       addedObject: {fileID: 6812228047293945770}
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 4508390424881706522}
+      addedObject: {fileID: 3657878881065950151}
     - targetCorrespondingSourceObject: {fileID: 9127662211880319232, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1081570319156500118}
@@ -2200,10 +2200,10 @@ MonoBehaviour:
     NumStackedVectorObservations: 1
     m_ActionSpec:
       m_NumContinuousActions: 3
-      BranchSizes: 03000000
-    VectorActionSize: 
+      BranchSizes: 
+    VectorActionSize: 03000000
     VectorActionDescriptions: []
-    VectorActionSpaceType: 0
+    VectorActionSpaceType: 1
     hasUpgradedBrainParametersWithActionSpec: 1
   m_Model: {fileID: 0}
   m_InferenceDevice: 0
@@ -2311,7 +2311,7 @@ MonoBehaviour:
     maxStep: 0
   hasUpgradedFromAgentParameters: 1
   MaxStep: 3000
-  tracks: {fileID: 4508390424881706522}
+  tracks: {fileID: 3657878881065950151}
   gripper: {fileID: 1081570319156500118}
   sensors: {fileID: 434451357782293778}
   yolo: {fileID: 7678926751972867306}
@@ -2328,6 +2328,23 @@ MonoBehaviour:
   actionRatePenalty: 0.001
   wallProximityPenalty: 0.015
   grabSuccessReward: 5
+  holdStepsRequired: 50
+  holdStepReward: 0.02
+  blindApproachBonus: 0.003
+  blindApproachMinForwardSpeed: 0.05
+  distanceRewardCloseMulBase: 2
+  distanceRewardCloseMulSlope: 4
+  ultrasonicNoise: 0.05
+  visionAngleNoise: 0.03
+  visionDistanceNoise: 0.09
+  sensorLatencySteps: 3
+  useYamlEnvParams: 1
+  useAutomaticGripper: 1
+  hardStopOnHold: 1
+  precisionApproachDistance: 0.5
+  precisionSlowdownSpeed: 0.15
+  precisionSlowdownBonus: 0.005
+  precisionOverspeedPenalty: 0.01
   outOfArenaPenalty: 2
   perStepPenalty: 0.001
   backwardMovementPenalty: 0.01
@@ -2414,7 +2431,7 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!114 &4508390424881706522
+--- !u!114 &3657878881065950151
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2425,20 +2442,20 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 462779415ca0146898a26168fb4a7732, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TrackController
+  m_EditorClassIdentifier: Assembly-CSharp::Controller
   leftForwardKey: 37
   leftBackwardKey: 33
   rightForwardKey: 19
   rightBackwardKey: 18
   leftTrackPoint: {fileID: 3852666780729393685}
   rightTrackPoint: {fileID: 702169120509895248}
-  maxLinearCmd: 2
-  maxAngularSpeedDeg: 200
+  maxLinearCmd: 0.25
+  maxAngularSpeedDeg: 120
   turnK: 0.3
   motorDeadzone: 10
   minMotorPwm: 35
   maxPwmStep: 15
-  velocityToPwm: 100
+  velocityToPwm: 200
   useManualInput: 0
   leftInput: 0
   rightInput: 0

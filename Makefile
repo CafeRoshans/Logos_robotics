@@ -259,7 +259,7 @@ cloud-train: cloud-check
 	             --run-id=$(CLOUD_RUN_ID) \
 	             --env=$(REMOTE_ENV_BIN) \
 	             --num-envs=$(CLOUD_NUM_ENVS) \
-	             --no-graphics \
+	             --timeout-wait 300 \
 	             $(CLOUD_EXTRA) \
 	             --env-args -logFile /dev/null \
 	             > ~/train_$(CLOUD_RUN_ID).log 2>&1 &'
@@ -279,7 +279,8 @@ cloud-resume: cloud-check
 	$(SSH) "source ~/miniconda/bin/activate mlagents && cd ~ && \
 	         nohup mlagents-learn $(REMOTE_CONFIG) \
 	             --run-id=$$LAST --resume \
-	             --env=$(REMOTE_ENV_BIN) --num-envs=$(CLOUD_NUM_ENVS) --no-graphics \
+	             --env=$(REMOTE_ENV_BIN) --num-envs=$(CLOUD_NUM_ENVS) \
+	             --timeout-wait 300 \
 	             --env-args -logFile /dev/null \
 	             > ~/train_$$LAST.log 2>&1 &"
 	@echo "✓ Resume запущен"

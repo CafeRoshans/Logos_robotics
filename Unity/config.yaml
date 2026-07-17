@@ -68,3 +68,26 @@ environment_parameters:
     sampler_parameters:
       min_value: 0.05
       max_value: 0.15
+
+  # === Новые параметры, читаются RobotBrain.ReadYamlEnvParams() ===
+
+  # Шум на УЗ (±) — доменная рандомизация датчика
+  ultrasonic_noise:
+    sampler_type: uniform
+    sampler_parameters:
+      min_value: 0.03
+      max_value: 0.08
+
+  # Задержка сенсоров (шагов) — эмуляция ROS pipeline
+  sensor_latency:
+    sampler_type: uniform
+    sampler_parameters:
+      min_value: 1
+      max_value: 5
+
+  # Задержка actions (шагов)
+  action_latency:
+    sampler_type: uniform
+    sampler_parameters:
+      min_value: 8
+      max_value: 13

@@ -40,14 +40,29 @@ public class RobotBrain : Agent
     public ObstacleSpawner obstacleSpawner;
 
     [Header("Сервопривод камеры")]
-    [Tooltip("Максимальный угол отклонения камеры ± (градусы). Специально НЕ ограничиваем узко — " +
-             "камера должна свободно 'осматриваться' и искать мяч в широком диапазоне. Награда за " +
-             "центрирование мяча в кадре есть (centeringBonus), но основной и более весомый стимул — " +
-             "довернуть КОРПУС туда же, куда смотрит камера (bodyCameraAlignmentBonus), так что широкий " +
-             "диапазон камеры не создаёт лазейки 'стою и просто верчу камерой'.")]
+    [Tooltip("Максимальный угол отклонения камеры ± (градусы). Камера свободно осматривается в " +
+             "широком диапазоне, но награду за центрирование получает только когда мяч видно И корпус " +
+             "довёрнут — не даёт стоять и просто крутить камеру.")]
     public float cameraServoMaxAngle = 90f;
-    [Tooltip("Скорость поворота сервопривода (град/сек) при полном сигнале")]
-    [System.Obsolete("Не используется с action space Gas/Steering. Скорость камеры теперь задаётся через MAX_CAMERA_STEP_NORMALIZED в OnActionReceived.")]
+
+    [Tooltip("МАКСИМАЛЬНАЯ скорость сервомотора (град за одно решение). Уменьшение = более " +
+             "медленная и плавная камера, не рыскает. 15° — референс. 5-8° — очень плавно, но " +
+             "камера долго доходит до цели. Пример: при DecisionPeriod=5 (Time.fixedDeltaTime=0.02): " +
+             "15°/decision × 10 decisions/sec = 150°/сек — реалистично для дешёвого сервопривода.")]
+    [Range(1f, 30f)]
+    public float cameraMaxStepDeg = 8f;
+
+    [Tooltip("EMA-сглаживание target'а от сети. 0.3 = быстрое реагирование, 0.1 = сильное " +
+             "сглаживание (шум сети почти не влияет). Меньше = стабильнее камера.")]
+    [Range(0.05f, 1f)]
+    public float cameraTargetEmaAlpha = 0.15f;
+
+    [Tooltip("Deadband: если сглаженный target находится в этом диапазоне от текущего угла — " +
+             "камера НЕ двигается. Больше = ленивее, стабильнее. 0.05 = 4.5° мёртвая зона.")]
+    [Range(0f, 0.2f)]
+    public float cameraTargetDeadband = 0.05f;
+
+    [System.Obsolete("Не используется — заменено на cameraMaxStepDeg.")]
     public float cameraServoSpeedDegPerSec = 90f;
 
     [Header("Границы арены (терминал 'вылетел')")]
@@ -92,6 +107,41 @@ public class RobotBrain : Agent
     public float blindApproachBonus = 0.003f;
     [Tooltip("Минимальная реальная скорость вперёд (м/с) для срабатывания blindApproachBonus")]
     public float blindApproachMinForwardSpeed = 0.05f;
+
+    [Header("Distance-reward proximity multiplier (из референса)")]
+    [Tooltip("Множитель distance-reward у мяча: ×(base + slope × (1 - clamp(dist))). " +
+             "base=2, slope=4: на 0.1м даёт ×5.6, на 1.5м ×2. Резко усиливает сигнал приближения близко к цели.")]
+    public float distanceRewardCloseMulBase  = 2f;
+    public float distanceRewardCloseMulSlope = 4f;
+
+    [Header("Шум наблюдений (доменная рандомизация)")]
+    [Tooltip("Амплитуда uniform-шума на УЗ (±). Значение читается из yaml, если useYamlEnvParams=true.")]
+    public float ultrasonicNoise       = 0.05f;
+    [Tooltip("Амплитуда uniform-шума на vision angle (±)")]
+    public float visionAngleNoise      = 0.03f;
+    [Tooltip("Амплитуда uniform-шума на vision distance (±). Обычно в 3× больше angle-шума — дистанция шумнее.")]
+    public float visionDistanceNoise   = 0.09f;
+
+    [Header("Задержка сенсоров (симуляция ROS2 pipeline)")]
+    [Tooltip("На сколько decisions задерживаются показания датчиков. 3 при DecisionPeriod=5 ≈ 300мс. " +
+             "Отдельно от actionBuffer, потому что sensor pipeline имеет свою задержку. Читается из yaml.")]
+    public int sensorLatencySteps = 3;
+
+    [Header("Yaml environment_parameters")]
+    [Tooltip("Читать ball_mass, ball_scale, ultrasonic_noise, vision_noise, sensor_latency, action_latency из config.yaml " +
+             "→ environment_parameters. Позволяет менять физику без пересборки билда + поддерживает curriculum.")]
+    public bool useYamlEnvParams = true;
+
+    [Header("Automatic gripper (из референса)")]
+    [Tooltip("Клешня хватает автоматически по IR-датчику, сеть НЕ управляет grab/release. " +
+             "Убирает дискретное action → упрощает action space → быстрее обучение. " +
+             "После включения обязательно поставь Behavior Parameters → Discrete Branches = 0 в инспекторе.")]
+    public bool useAutomaticGripper = true;
+
+    [Header("Hard-stop после захвата")]
+    [Tooltip("После успешного захвата мяча принудительно обнулять команды моторов. " +
+             "Иначе робот продолжает крутиться и может уронить мяч.")]
+    public bool hardStopOnHold = true;
 
     [Header("Точность подъезда к мячу (slow-down + speed penalty near ball)")]
     [Tooltip("Дистанция до мяча (м), ниже которой начинают действовать награды/штрафы за скорость")]
@@ -268,6 +318,11 @@ public class RobotBrain : Agent
     private int   _dropoutBurstsCount = 0; // сколько burst dropout произошло за эпизод
 
     private Queue<float[]> actionBuffer = new Queue<float[]>();
+
+    // Отдельный FIFO для задержки сенсоров (UZ, LIR, RIR, GripperIR).
+    // Реальный ROS pipeline: sensor → serial → node → topic → Unity. Латентность есть.
+    private Queue<float[]> sensorBuffer = new Queue<float[]>();
+    private float[] _delayedSensors = new float[4] { 1f, 0f, 0f, 0f };
     private int currentActionLatency = 5; 
 
 
@@ -512,15 +567,21 @@ public class RobotBrain : Agent
         _dropoutStepsLeft  = 0;
         _prevHeadingDeg    = transform.eulerAngles.y;
 
-        // simulatin latenct of real ros2 connection
+        // Симуляция латентности реального ROS2 pipeline
         currentActionLatency = (int)UnityEngine.Random.Range(8.14f, 12.14f);
         actionBuffer.Clear();
+        for (int i = 0; i < currentActionLatency; i++)
+            actionBuffer.Enqueue(new float[] { 0f, 0f, 0f });
 
-        for (int i =0; i < currentActionLatency; i++)
-        {
-            actionBuffer.Enqueue(new float[] {0f, 0f, 0f});
-        }
+        // Sensor buffer — задержка датчиков (независимо от action latency)
+        sensorBuffer.Clear();
+        _delayedSensors = new float[] { 1f, 0f, 0f, 0f };
+        for (int i = 0; i < sensorLatencySteps; i++)
+            sensorBuffer.Enqueue(new float[] { 1f, 0f, 0f, 0f });
 
+        // Читаем yaml environment_parameters — обновляет ball_mass/scale, шумы, latency.
+        // Вызывается ПОСЛЕ базовой рандомизации, чтобы yaml мог её переопределить.
+        ReadYamlEnvParams();
     }
 
     // Гауссов шум через Box-Muller
@@ -533,24 +594,43 @@ public class RobotBrain : Agent
 
     public override void CollectObservations(VectorSensor sensor)
     {
-        // 1. УЗ нормализованный
-        float uzNoisy = sensors.ultrasonicNormalized + Gaussian(0.1f);
-        sensor.AddObservation(Mathf.Clamp01(uzNoisy));
-        // 2. Левый ИК препятствия
-        sensor.AddObservation(sensors != null ? (float)sensors.leftIR : 0f);
-        // 3. Правый ИК препятствия
-        sensor.AddObservation(sensors != null ? (float)sensors.rightIR : 0f);
-        // 4. ИК клешни
-        sensor.AddObservation(sensors != null ? (float)sensors.gripperIR : 0f);
+        // === СЕНСОРЫ (наблюдения 1-4) с шумом + задержкой ===
+        // Шум добавляется к УЗ. ИК — бинарные, шум применён как случайные инверсии.
+        // Задержка — FIFO из sensorBuffer (симулирует ROS/serial latency).
+        float rawUS   = sensors != null ? sensors.ultrasonicNormalized : 1f;
+        float noisyUS = Mathf.Clamp01(rawUS + Random.Range(-ultrasonicNoise, ultrasonicNoise));
+        float rawLIR  = sensors != null ? sensors.leftIR   : 0;
+        float rawRIR  = sensors != null ? sensors.rightIR  : 0;
+        float rawGIR  = sensors != null ? sensors.gripperIR : 0;
 
-        // 5. Горизонтальный угол до мяча по камере (0, если не виден).
-        //    ВАЖНО: SeesBallEffective() учитывает burst dropout — если робот
-        //    только что резко повернулся, YOLO "смазан" и мяч не виден.
+        // Пропускаем через sensor buffer (если задержка > 0)
+        if (sensorLatencySteps > 0)
+        {
+            sensorBuffer.Enqueue(new float[] { noisyUS, rawLIR, rawRIR, rawGIR });
+            if (sensorBuffer.Count > 0) _delayedSensors = sensorBuffer.Dequeue();
+            sensor.AddObservation(_delayedSensors[0]);
+            sensor.AddObservation(_delayedSensors[1]);
+            sensor.AddObservation(_delayedSensors[2]);
+            sensor.AddObservation(_delayedSensors[3]);
+        }
+        else
+        {
+            sensor.AddObservation(noisyUS);
+            sensor.AddObservation(rawLIR);
+            sensor.AddObservation(rawRIR);
+            sensor.AddObservation(rawGIR);
+        }
+
+        // === VISION (наблюдения 5-8) с шумом ===
         bool visible = SeesBallEffective();
-
-        sensor.AddObservation(visible ? yolo.horizontalAngle : 0f);
-        // 6. Норм. расстояние по камере (1, если не виден)
-        sensor.AddObservation(visible ? yolo.normalizedDistance : 1f);
+        float angleObs = visible
+            ? Mathf.Clamp(yolo.horizontalAngle + Random.Range(-visionAngleNoise, visionAngleNoise), -1f, 1f)
+            : 0f;
+        float distObs = visible
+            ? Mathf.Clamp01(yolo.normalizedDistance + Random.Range(-visionDistanceNoise, visionDistanceNoise))
+            : 1f;
+        sensor.AddObservation(angleObs);
+        sensor.AddObservation(distObs);
         // 7. Последнее известное направление на мяч
         sensor.AddObservation(_lastKnownBallDirection);
         // 8. Флаг видимости
@@ -608,7 +688,15 @@ public class RobotBrain : Agent
         float freshGas   = Mathf.Clamp(actions.ContinuousActions[0], -1f, 1f);
         float freshSteer = Mathf.Clamp(actions.ContinuousActions[1], -1f, 1f);
         float freshCam   = Mathf.Clamp(actions.ContinuousActions[2], -1f, 1f);
-        int   gripAct    = actions.DiscreteActions[0]; // 0 = idle, 1 = grab, 2 = release
+        // Discrete action: если useAutomaticGripper — сеть НЕ управляет клешнёй,
+        // читаем только для обратной совместимости (когда в Behavior Parameters
+        // ещё Discrete Branches = 1). При useAutomaticGripper клешня хватает
+        // автоматически по IR (задаётся через GripperController.autoGrabOnSensor).
+        int gripAct = 0;
+        if (!useAutomaticGripper && actions.DiscreteActions.Length > 0)
+        {
+            gripAct = actions.DiscreteActions[0]; // 0 = idle, 1 = grab, 2 = release
+        }
 
         // Пропускаем непрерывные сигналы через FIFO-буфер задержки — эмулируем
         // латентность ROS2/сети/моторов. Дискретный gripAct не задерживаем.
@@ -623,34 +711,38 @@ public class RobotBrain : Agent
 
         // 1. Движение — Gas + Steering, TrackController раскладывает в L/R по turnK.
         //    Совместимо с ROS /cmd_vel (linear.x = gas, angular.z = steer).
+        //    HARD-STOP после захвата: пока держим мяч, силой обнуляем моторы, чтобы
+        //    не крутиться и не уронить (как в референсе).
         if (tracks != null)
         {
-            tracks.Move(gas, steer);
+            bool holdingBall = hardStopOnHold && gripper != null && gripper.isHolding;
+            if (holdingBall) tracks.Move(0f, 0f);
+            else             tracks.Move(gas, steer);
         }
 
         // 2. Сервопривод камеры — абсолютный target с ТРЕМЯ уровнями сглаживания:
         //    (a) EMA-фильтр самого target'а — глушит высокочастотный шум сети;
-        //    (b) deadband на дельту — не двигаемся к target'у если он "почти на месте";
-        //    (c) rate-limit MAX_CAMERA_STEP_NORMALIZED — физический предел сервомотора.
-        //    Без (a) и (b) камера дрожит: любой шумный target=±0.05 → камера двигается
-        //    на 15° туда-сюда каждое решение.
-        const float MAX_CAMERA_STEP_NORMALIZED = 15f / 90f;   // ≈ 0.167
-        const float CAM_TARGET_EMA_ALPHA       = 0.3f;         // 0.3 = сильное сглаживание
-        const float CAM_TARGET_DEADBAND        = 0.03f;        // ~2.7°: игнорируем малые изменения
+        //    (b) deadband на дельту — не двигаемся, если target "почти на месте";
+        //    (c) rate-limit — физический предел скорости сервомотора.
+        //    Все три параметра НАСТРАИВАЮТСЯ в инспекторе:
+        //    cameraTargetEmaAlpha, cameraTargetDeadband, cameraMaxStepDeg.
 
-        // Страховка от NaN — если что-то дало Infinity, не портим состояние
+        // Страховка от NaN
         if (float.IsNaN(camTarget) || float.IsInfinity(camTarget)) camTarget = _currentCameraYaw;
 
-        // (a) EMA сглаживание — свежий target смешивается со старым
-        _smoothedCamTarget = (1f - CAM_TARGET_EMA_ALPHA) * _smoothedCamTarget
-                             + CAM_TARGET_EMA_ALPHA * camTarget;
+        // Переводим max-step из градусов в нормализованные [-1..1] единицы
+        float maxStepNormalized = cameraMaxStepDeg / Mathf.Max(1f, cameraServoMaxAngle);
 
-        // (b) Deadband: если сглаженный target почти совпадает с текущим положением — стоим
+        // (a) EMA
+        _smoothedCamTarget = (1f - cameraTargetEmaAlpha) * _smoothedCamTarget
+                             + cameraTargetEmaAlpha * camTarget;
+
+        // (b) Deadband
         float camDelta = _smoothedCamTarget - _currentCameraYaw;
-        if (Mathf.Abs(camDelta) < CAM_TARGET_DEADBAND) camDelta = 0f;
+        if (Mathf.Abs(camDelta) < cameraTargetDeadband) camDelta = 0f;
 
-        // (c) Rate-limit: физический предел скорости сервомотора
-        camDelta = Mathf.Clamp(camDelta, -MAX_CAMERA_STEP_NORMALIZED, MAX_CAMERA_STEP_NORMALIZED);
+        // (c) Rate-limit
+        camDelta = Mathf.Clamp(camDelta, -maxStepNormalized, maxStepNormalized);
 
         _currentCameraYaw = Mathf.Clamp(_currentCameraYaw + camDelta, -1f, 1f);
         _cameraServoAngle = _currentCameraYaw * cameraServoMaxAngle;
@@ -660,9 +752,18 @@ public class RobotBrain : Agent
         // 3. Клешня
         if (gripper != null)
         {
-            if      (gripAct == 1) gripper.grabCommand = true;
-            else if (gripAct == 2) gripper.grabCommand = false;
-            // gripAct == 0 — не трогаем состояние
+            if (useAutomaticGripper)
+            {
+                // Автоматический режим (как в референсе): grabCommand всегда true.
+                // GripperController.CanGrab() сам решит хватать по IR-датчику клешни.
+                gripper.grabCommand = true;
+            }
+            else
+            {
+                // Legacy режим: сеть управляет через дискретный action.
+                if      (gripAct == 1) gripper.grabCommand = true;
+                else if (gripAct == 2) gripper.grabCommand = false;
+            }
         }
 
         // 4. Обновление служебных переменных детекции — используем эффективную видимость
@@ -702,14 +803,19 @@ public class RobotBrain : Agent
         if (ballVisible) _framesBallVisible++;
         if (_rb != null) _speedAccum += _rb.linearVelocity.magnitude;
 
-        // а) Сближение с мячом (delta distance)
+        // а) Сближение с мячом с proximity multiplier (из референса).
+        //    Формула: reward = Δd × distanceScale × (base + slope × (1 - clamp(dist))).
+        //    На 0.1м: ×5.6 — сильный сигнал «уже почти на месте, дожми».
+        //    На 1.5м: ×2   — базовое поощрение приближаться.
+        //    Это ключевое отличие от нашей старой линейной формулы (×1.5 у мяча).
         float curDist = DistanceToBall();
         if (_prevDistanceToBall > 0f && curDist > 0f)
         {
-            float delta = _prevDistanceToBall - curDist; // + = приблизились
+            float delta = _prevDistanceToBall - curDist;
             delta = Mathf.Clamp(delta, -0.5f, 0.5f);
-            float mul   = (curDist < closeDistanceThreshold) ? closeDistanceBonusMul : 1f;
-            float rDist = delta * distanceRewardScale * mul;
+            float proximityMul = distanceRewardCloseMulBase
+                                 + distanceRewardCloseMulSlope * (1f - Mathf.Clamp01(curDist));
+            float rDist = delta * distanceRewardScale * proximityMul;
             AddReward(rDist); _rewardDistance += rDist;
         }
         _prevDistanceToBall = curDist;
@@ -802,9 +908,10 @@ public class RobotBrain : Agent
             }
         }
 
-        // з) Штраф за ложный захват — команда grab, когда мяч не подтверждён рядом с клешнёй.
-        // Без этого агент может научиться спамить grab "на всякий случай".
-        if (gripAct == 1 && (gripper == null || !gripper.isHolding))
+        // з) Штраф за ложный захват — только в legacy-режиме (когда сеть управляет клешнёй).
+        //    При useAutomaticGripper = true спамить grab невозможно (grabCommand всегда true,
+        //    но реальный grab — только когда датчик клешни видит мяч).
+        if (!useAutomaticGripper && gripAct == 1 && (gripper == null || !gripper.isHolding))
         {
             bool ballNear = sensors != null && (float)sensors.gripperIR > grabProximityIRThreshold;
             if (!ballNear)
@@ -958,13 +1065,59 @@ public class RobotBrain : Agent
         cont[0] = gas;
         cont[1] = steer;
         cont[2] = camTarget;
-        disc[0] = g;
+        // disc[0] пишем только если Discrete Branches в Behavior Parameters ещё стоит.
+        // При useAutomaticGripper Discrete Branches = 0, disc.Length = 0.
+        if (disc.Length > 0) disc[0] = g;
     }
 
     float DistanceToBall()
     {
         if (targetBall == null) return -1f;
         return Vector3.Distance(transform.position, targetBall.position);
+    }
+
+    /// <summary>
+    /// Читает environment_parameters из config.yaml (Academy) и обновляет соответствующие поля.
+    /// Вызывается в OnEpisodeBegin — параметры могут меняться между эпизодами (curriculum).
+    /// Если yaml не задал параметр, оставляем текущее значение из инспектора.
+    /// </summary>
+    void ReadYamlEnvParams()
+    {
+        if (!useYamlEnvParams) return;
+        var env = Academy.Instance.EnvironmentParameters;
+
+        // Ball: mass, scale
+        if (targetBall != null)
+        {
+            var brb = targetBall.GetComponent<Rigidbody>();
+            if (brb != null && !brb.isKinematic)
+            {
+                float yamlBallMass = env.GetWithDefault("ball_mass", -1f);
+                if (yamlBallMass > 0f) brb.mass = yamlBallMass;
+            }
+            float yamlBallScale = env.GetWithDefault("ball_scale", -1f);
+            if (yamlBallScale > 0.001f) targetBall.localScale = Vector3.one * yamlBallScale;
+        }
+
+        // Noise
+        float yamlVisionNoise = env.GetWithDefault("vision_noise", -1f);
+        if (yamlVisionNoise >= 0f)
+        {
+            visionAngleNoise    = yamlVisionNoise;
+            visionDistanceNoise = yamlVisionNoise * 3f;
+        }
+        float yamlUsNoise = env.GetWithDefault("ultrasonic_noise", -1f);
+        if (yamlUsNoise >= 0f) ultrasonicNoise = yamlUsNoise;
+
+        // Latency
+        float yamlSensorLat = env.GetWithDefault("sensor_latency", -1f);
+        if (yamlSensorLat >= 0f) sensorLatencySteps = Mathf.Max(0, (int)yamlSensorLat);
+        float yamlActionLat = env.GetWithDefault("action_latency", -1f);
+        if (yamlActionLat >= 0f) currentActionLatency = Mathf.Max(0, (int)yamlActionLat);
+
+        // Vision burst dropout
+        float yamlDropoutRate = env.GetWithDefault("vision_dropout", -1f);
+        // (Не применяется напрямую, у нас burst dropout по угловой скорости — оставляем как есть)
     }
 
     static bool IsValid(Vector3 v)

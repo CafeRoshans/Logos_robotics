@@ -23,12 +23,13 @@ public class Controller : MonoBehaviour
     public Transform leftTrackPoint;
     public Transform rightTrackPoint;
 
-    [Header("Скорость")]
-    public float maxLinearCmd = 0.8f;
+    [Header("Скорость (дефолты как в референс-репе для реального GFS-X)")]
+    [Tooltip("Полная линейная скорость робота при input=1 (м/с). Реальный робот ~0.57 м/с, но " +
+             "для стабильности обучения PPO ограничиваем до 0.25. При input=1 → скорость = maxLinearCmd.")]
+    public float maxLinearCmd = 0.25f;
 
-    [Tooltip("Реалистичный потолок скорости разворота, град/с. " +
-            "Не даёт роботу улетать в нереалистичное вращение даже при ошибке в геометрии.")]
-    public float maxAngularSpeedDeg = 200f;
+    [Tooltip("Максимальная угловая скорость разворота, град/с. 120°/сек как у реального GFS-X.")]
+    public float maxAngularSpeedDeg = 120f;
 
     [Header("Дифференциальный привод — gas/steering декомпозиция")]
     [Tooltip("Коэффициент смешивания руля со скоростью гусениц. При Move(gas=1, steer=1): " +

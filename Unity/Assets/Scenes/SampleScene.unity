@@ -1353,7 +1353,7 @@ PrefabInstance:
     - target: {fileID: 448925899835208303, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_Model
       value: 
-      objectReference: {fileID: 5022602860645237092, guid: 95cdfb048cc5142bbaa5b025ccc782c9, type: 3}
+      objectReference: {fileID: 0}
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: perStepPenalty
       value: 0.002
@@ -1361,6 +1361,10 @@ PrefabInstance:
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: wallProximityPenalty
       value: 0.01
+      objectReference: {fileID: 0}
+    - target: {fileID: 4508390424881706522, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: useManualInput
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5089989243390918077, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_Name
@@ -1409,6 +1413,10 @@ PrefabInstance:
     - target: {fileID: 8865409503205789608, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_Model
       value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 8865409503205789608, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: m_BehaviorType
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
