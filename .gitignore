@@ -14,6 +14,11 @@ Unity/[Rr]ecordings/
 
 # ML-Agents автогенерируемые тайминги — шумят в diff'ах
 Unity/[Aa]ssets/ML-Agents/Timers/
+.DS_Store
+video_runs/
+.vscode/
+Build/build.log
+Unity/results/
 
 # --- ФАЙЛЫ И ПАПКИ, КОТОРЫЕ НУЖНО КОММИТИТЬ (ProjectSettings, Assets, Packages) ---
 # Они не указаны здесь, поэтому Git добавит их по умолчанию. 

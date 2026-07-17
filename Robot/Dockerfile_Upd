@@ -1,0 +1,12 @@
+FROM my_old_ros_base
+
+RUN apt-get update && apt-get install -y \
+	python3-smbus \
+	i2c-tools \
+	python3-pip \
+	v4l-utils \
+	libgl1-mesa-glx \
+	&& rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir opencv-python-headless v4l2py
+
