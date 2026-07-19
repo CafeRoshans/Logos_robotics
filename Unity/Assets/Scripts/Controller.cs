@@ -3,10 +3,17 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// Кинематический контроллер гусеничного робота с дифференциальным приводом.
-/// Управление: 2 параметра скорости гусениц [-1..1] (leftInput/rightInput) —
-/// именно этот интерфейс ожидает нейронка / ML-Agents brain.
-/// Повороты считаются точной кинематической формулой на основе реального
-/// расстояния между гусеницами (trackWidth), а не подобранной вручную константой.
+///
+/// Move(gas, steering) — основной интерфейс для нейронки/ROS: [-1..1] каждый, доля от
+/// РЕАЛЬНЫХ физических пределов робота (maxLinearCmd, maxAngularSpeedDeg). Внутри считается
+/// честная инверсная кинематика по РЕАЛЬНОЙ колее (trackWidth) — а не произвольный
+/// коэффициент подмешивания. Раньше здесь стоял turnK (константа 0.3), не связанная с
+/// физической геометрией робота — leftTrackPoint/rightTrackPoint при этом были объявлены,
+/// но фактически не влияли на повороты при ручном/сетевом управлении (только на прямую
+/// кинематику в FixedUpdate). Теперь колея используется и на входе, и на выходе — оба
+/// места считают поворот одной и той же физикой.
+/// SetTrackInputs(left, right) — низкоуровневый прямой доступ к гусеницам [-1..1] каждая,
+/// используется ручным тестом с клавиатуры и как результат работы Move().
 /// Силы на Rigidbody НЕ прикладываются — движение целиком через MovePosition/MoveRotation.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
@@ -30,15 +37,6 @@ public class Controller : MonoBehaviour
 
     [Tooltip("Максимальная угловая скорость разворота, град/с. 120°/сек как у реального GFS-X.")]
     public float maxAngularSpeedDeg = 120f;
-
-    [Header("Дифференциальный привод — gas/steering декомпозиция")]
-    [Tooltip("Коэффициент смешивания руля со скоростью гусениц. При Move(gas=1, steer=1): " +
-             "leftInput = 1 + 1×turnK, rightInput = 1 - 1×turnK. " +
-             "0.3 — умеренный поворот, гусеницы разной скорости но обе едут вперёд. " +
-             "1.0 — жёсткий поворот, одна гусеница стоит. " +
-             "Влияет только на Move(gas, steering); SetTrackInputs напрямую не задействует.")]
-    [Range(0.1f, 1.5f)]
-    public float turnK = 0.30f;
 
     [Header("Параметры PWM (эмуляция реального мотора)")]
     public float motorDeadzone = 10f;
@@ -86,19 +84,38 @@ public class Controller : MonoBehaviour
     }
 
     /// <summary>
-    /// Основной интерфейс для нейронки: газ (вперёд/назад) + руль (влево/вправо).
-    /// Внутри раскладывается в leftInput/rightInput по формуле дифференциального привода.
-    /// Совместимо с ROS /cmd_vel (Twist) — linear.x = gas, angular.z = steering.
+    /// Основной интерфейс для нейронки/ROS: газ (вперёд/назад) + руль (влево/вправо),
+    /// [-1..1] каждый — доля от РЕАЛЬНЫХ физических пределов ЭТОГО эпизода (maxLinearCmd,
+    /// maxAngularSpeedDeg, которые могут быть рандомизированы доменной рандомизацией).
+    /// Внутри — точная инверсная кинематика дифференциального привода по РЕАЛЬНОЙ колее
+    /// (trackWidth), обратная той же формуле, что считает прямую кинематику в FixedUpdate:
+    ///   angularVelocityRad = (effRight - effLeft) / trackWidth
+    ///   linearVelocity     = (effLeft + effRight) / 2
+    /// Если требуемая скорость гусеницы превышает физический потолок мотора — ОБЕ гусеницы
+    /// пропорционально уменьшаются (не клипаются по отдельности), сохраняя заданное
+    /// соотношение gas/steering максимально близко к тому, что просила сеть/ROS.
+    /// Совместимо с ROS /cmd_vel (Twist): linear.x = gas × maxLinearCmd, angular.z = steering × maxAngularSpeedDeg.
     /// </summary>
     public void Move(float gas, float steering)
     {
         gas      = Mathf.Clamp(gas,      -1f, 1f);
         steering = Mathf.Clamp(steering, -1f, 1f);
 
-        float left  = gas + steering * turnK;
-        float right = gas - steering * turnK;
+        float desiredLinear     = gas * maxLinearCmd;                          // м/с
+        float desiredAngularRad = steering * maxAngularSpeedDeg * Mathf.Deg2Rad; // рад/с
 
-        // clamp итоговых значений — сумма gas + steering×turnK может выйти за ±1
+        float vLeft  = desiredLinear - desiredAngularRad * trackWidth * 0.5f;
+        float vRight = desiredLinear + desiredAngularRad * trackWidth * 0.5f;
+
+        float left  = maxLinearCmd > 0.0001f ? vLeft  / maxLinearCmd : 0f;
+        float right = maxLinearCmd > 0.0001f ? vRight / maxLinearCmd : 0f;
+
+        // Пропорциональное уменьшение при выходе за физический предел мотора —
+        // сохраняет заданное соотношение gas/steering вместо искажающего клипа по отдельности.
+        float maxMag = Mathf.Max(Mathf.Abs(left), Mathf.Abs(right), 1f);
+        left  /= maxMag;
+        right /= maxMag;
+
         SetTrackInputs(left, right);
     }
 

@@ -35,6 +35,20 @@ public class GripperController : MonoBehaviour
     [HideInInspector] public bool isHolding = false;
     [HideInInspector] public bool grabCommand = false;   // внешняя команда: 1 = сжать, 0 = разжать
 
+    // Счётчики за эпизод — для диагностики в TensorBoard (см. RobotBrain.LogEpisodeStats).
+    // Разделение полезно: если сеть почти всегда хватает через "резерв" (сферу), а не через
+    // ИК-датчик — это сигнал либо плохо откалиброванного ИК, либо того, что сеть не может
+    // точно прицелиться и полагается на более широкий/мягкий запас.
+    [HideInInspector] public int grabsViaSensorThisEpisode   = 0;
+    [HideInInspector] public int grabsViaFallbackThisEpisode = 0;
+
+    /// <summary>Сбрасывает счётчики захвата — вызывай из RobotBrain.OnEpisodeBegin.</summary>
+    public void ResetGrabStats()
+    {
+        grabsViaSensorThisEpisode   = 0;
+        grabsViaFallbackThisEpisode = 0;
+    }
+
     private Rigidbody heldRb;
     /// <summary>Публичный доступ к захваченному объекту — RobotBrain использует
     /// чтобы верифицировать: захвачен ли ИМЕННО его целевой мяч, а не чужой из соседней арены.</summary>
@@ -90,8 +104,9 @@ public class GripperController : MonoBehaviour
         }
 
         GameObject ball = null;
+        bool viaSensor = sensors != null && sensors.gripperIRHitObject != null;
 
-        if (sensors != null && sensors.gripperIRHitObject != null)
+        if (viaSensor)
             ball = sensors.gripperIRHitObject;
         else
             ball = FindBallNearHoldPoint();
@@ -101,6 +116,9 @@ public class GripperController : MonoBehaviour
             Debug.Log("[GripperController] Мяч не найден: датчик клешни ничего не видит, и в grabSearchRadius пусто.");
             return;
         }
+
+        if (viaSensor) grabsViaSensorThisEpisode++;
+        else           grabsViaFallbackThisEpisode++;
 
         Rigidbody rb  = ball.GetComponent<Rigidbody>();
         Collider  col = ball.GetComponent<Collider>();

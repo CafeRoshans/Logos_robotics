@@ -45,7 +45,7 @@ GameObject:
   - component: {fileID: 6442222579977824279}
   m_Layer: 0
   m_Name: Cube
-  m_TagString: Untagged
+  m_TagString: Wall
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -620,8 +620,8 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -1.4449301, y: 10.099501, z: 0.70763034}
-  m_LocalScale: {x: 0.099999994, y: 0.1, z: 0.1}
-  m_ConstrainProportionsScale: 0
+  m_LocalScale: {x: 0.07, y: 0.07, z: 0.07}
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 8835198178993767469}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -765,7 +765,7 @@ GameObject:
   - component: {fileID: 1777479957684328950}
   m_Layer: 0
   m_Name: Cube (2)
-  m_TagString: Untagged
+  m_TagString: Wall
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1001,7 +1001,7 @@ GameObject:
   - component: {fileID: 7325436200258155301}
   m_Layer: 0
   m_Name: Cube (3)
-  m_TagString: Untagged
+  m_TagString: Wall
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1113,7 +1113,7 @@ GameObject:
   - component: {fileID: 1192921350881319256}
   m_Layer: 0
   m_Name: Cube (1)
-  m_TagString: Untagged
+  m_TagString: Wall
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1588,13 +1588,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7273662464528248403}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.1759999, z: 0.176}
+  m_LocalRotation: {x: 0.06975647, y: 0, z: 0, w: 0.9975641}
+  m_LocalPosition: {x: 0.0000024735928, y: 1.1759987, z: 0.17600212}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7170547908202784088}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 8, y: 0, z: 0}
 --- !u!20 &6418510954871976499
 Camera:
   m_ObjectHideFlags: 0
@@ -2137,9 +2137,6 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 8865409503205789608}
-    - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
-      insertIndex: -1
       addedObject: {fileID: 5783289150067302827}
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
@@ -2165,6 +2162,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6364411629071752895}
+    - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2613303614116465356}
     - targetCorrespondingSourceObject: {fileID: 9127662211880319232, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1081570319156500118}
@@ -2189,37 +2189,6 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
   m_PrefabInstance: {fileID: 4420174354059537694}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &8865409503205789608
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1710318917514631624}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5d1c4e0b1822b495aa52bc52839ecb30, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.ML-Agents::Unity.MLAgents.Policies.BehaviorParameters
-  m_BrainParameters:
-    VectorObservationSize: 15
-    NumStackedVectorObservations: 1
-    m_ActionSpec:
-      m_NumContinuousActions: 3
-      BranchSizes: 
-    VectorActionSize: 03000000
-    VectorActionDescriptions: []
-    VectorActionSpaceType: 1
-    hasUpgradedBrainParametersWithActionSpec: 1
-  m_Model: {fileID: 5022602860645237092, guid: 6924c756d6a5f4a279c05575d8ea80f2, type: 3}
-  m_InferenceDevice: 0
-  m_BehaviorType: 0
-  m_BehaviorName: GFSX_Brain
-  TeamId: 0
-  m_UseChildSensors: 1
-  m_UseChildActuators: 1
-  m_DeterministicInference: 0
-  m_ObservableAttributeHandling: 0
 --- !u!114 &5783289150067302827
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2286,11 +2255,11 @@ MonoBehaviour:
     VectorObservationSize: 15
     NumStackedVectorObservations: 4
     m_ActionSpec:
-      m_NumContinuousActions: 3
-      BranchSizes: 03000000
-    VectorActionSize: 
+      m_NumContinuousActions: 2
+      BranchSizes: 
+    VectorActionSize: 02000000
     VectorActionDescriptions: []
-    VectorActionSpaceType: 0
+    VectorActionSpaceType: 1
     hasUpgradedBrainParametersWithActionSpec: 1
   m_Model: {fileID: 0}
   m_InferenceDevice: 0
@@ -2323,24 +2292,22 @@ MonoBehaviour:
   simCam: {fileID: 7678926751972867306}
   yolo: {fileID: 4827791581018501935}
   cameraServo: {fileID: 7170547908202784088}
+  cameraAim: {fileID: 2613303614116465356}
   targetBall: {fileID: 2662588395027316777}
   obstacleSpawner: {fileID: 401300216358652757}
-  useRealRobot: 1
+  useRealRobot: 0
   rosBridge: {fileID: 6364411629071752895}
   cameraServoMaxAngle: 90
-  cameraMaxStepDeg: 8
-  cameraTargetEmaAlpha: 0.15
-  cameraTargetDeadband: 0.05
   arenaCenterOffset: {x: 0, y: 0, z: 2.9}
   arenaHalfSize: {x: 1.42, y: 1, z: 3.25}
   distanceRewardScale: 1
   distanceRewardAlpha: 2
   closeRadius: 0.35
   driveRatePenalty: 0.001
-  cameraRatePenalty: 0.008
   wallProximityPenalty: 0.015
   timeoutPenalty: 0.5
   obstacleTag: Obstacle
+  wallTag: Wall
   obstacleCollisionPenalty: 1
   endEpisodeOnObstacleHit: 1
   grabSuccessReward: 5
@@ -2367,6 +2334,7 @@ MonoBehaviour:
   centeringMinMovement: 0.03
   bodyCameraAlignmentBonus: 0.04
   bodyCameraAlignmentToleranceDeg: 4
+  bodyAlignmentStreakCap: 30
   grabProximityIRThreshold: 0.5
   randomizeSpawnPositions: 1
   minRobotBallDistance: 0.6
@@ -2377,13 +2345,19 @@ MonoBehaviour:
   - {fileID: 6016700507148416519}
   - {fileID: 4872751535100657784}
   randomizeBallMass: 1
+  ballMassMean: 0.08
+  ballMassStddev: 0.02
   randomizeRobotMass: 1
+  robotMassMean: 2.5
+  robotMassStddev: 0.3
   randomizeMotors: 1
   motorCommonMulMin: 0.85
   motorCommonMulMax: 1.15
   motorPerSideJitter: 0.02
   robotMaxSpeedMin: 0.6
   robotMaxSpeedMax: 1
+  nominalMaxLinearCmd: 0.25
+  nominalMaxAngularSpeedDeg: 120
   motorPwmStepMin: 10
   motorPwmStepMax: 20
   enableYoloBurstDropout: 1
@@ -2459,7 +2433,6 @@ MonoBehaviour:
   rightTrackPoint: {fileID: 702169120509895248}
   maxLinearCmd: 0.25
   maxAngularSpeedDeg: 120
-  turnK: 0.3
   motorDeadzone: 10
   minMotorPwm: 35
   maxPwmStep: 15
@@ -2505,6 +2478,30 @@ MonoBehaviour:
   maxLinearSpeed: 0.5
   maxAngularSpeed: 1
   emaAlpha: 0.8
+--- !u!114 &2613303614116465356
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1710318917514631624}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab9a09fe0b2d57f40b7403223cebdb01, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraAimController
+  cameraServo: {fileID: 7170547908202784088}
+  maxAngleDeg: 45
+  stepDeg: 2.5
+  stepIntervalSeconds: 0.01
+  searchStepDeg: 5
+  searchStepIntervalSeconds: 0.02
+  kP: 1.6
+  kI: 0
+  kD: 0.3
+  centerDeadband: 0.03
+  holdLastKnownSeconds: 0.3
+  searchPauseAtExtremes: 0
 --- !u!1 &3368425570599177975 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1434554889793086441, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
@@ -2566,6 +2563,8 @@ MonoBehaviour:
   toggleKey: 1
   isHolding: 0
   grabCommand: 0
+  grabsViaSensorThisEpisode: 0
+  grabsViaFallbackThisEpisode: 0
 --- !u!65 &1385710156901195024
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -2585,8 +2584,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.008635822, y: 0.00632296, z: 0.0071913935}
-  m_Center: {x: -0.000074291995, y: 0.0010237253, z: -0.0007419946}
+  m_Size: {x: 0.019391013, y: 0.00632296, z: 0.0071913935}
+  m_Center: {x: -0.003549283, y: 0.0010237247, z: -0.0007419942}
 --- !u!4 &6387415526279716740 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7346274463034716826, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
