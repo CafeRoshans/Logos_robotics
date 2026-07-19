@@ -82,7 +82,7 @@ public class RobotBrain : Agent
     [Tooltip("Множитель награды за сближение с мячом (Δd, м). " +
              "0.05 = за подъезд на 1 м агент получает +0.05. За эпизод 500 шагов " +
              "суммарный вклад distance-reward < ±3, что не забивает +5 за успешный захват.")]
-    public float distanceRewardScale   = 0.05f;
+    public float distanceRewardScale   = 1.0f;
     [Tooltip("Коэф. α в exp(α×(1-dist)): α=2 → ×7.4 у мяча, ×1.0 на 1м. Усиливает сигнал у цели без сингулярности.")]
     public float distanceRewardAlpha   = 2f;
     [Tooltip("Радиус переключения Phase1→Phase2 (м). Дальше — delta-reward за сближение. Ближе — slow-approach.")]
@@ -118,7 +118,7 @@ public class RobotBrain : Agent
     [Header("Blind approach — движение вперёд когда мяч НЕ виден")]
     [Tooltip("Бонус за каждый шаг, когда робот едет вперёд, но мяч ещё не виден. " +
              "Стимулирует активный поиск, а не стояние на месте при потере мяча.")]
-    public float blindApproachBonus = 0.004f;
+    public float blindApproachBonus = 0.003f;
     [Tooltip("Минимальная реальная скорость вперёд (м/с) для срабатывания blindApproachBonus")]
     public float blindApproachMinForwardSpeed = 0.05f;
 

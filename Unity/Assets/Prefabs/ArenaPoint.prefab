@@ -2363,7 +2363,7 @@ MonoBehaviour:
   cameraTargetDeadband: 0.05
   arenaCenterOffset: {x: 0, y: 0, z: 2.9}
   arenaHalfSize: {x: 1.4, y: 1, z: 3.2}
-  distanceRewardScale: 1
+  distanceRewardScale: 2
   distanceRewardAlpha: 2
   closeRadius: 0.35
   driveRatePenalty: 0.001
@@ -2383,7 +2383,7 @@ MonoBehaviour:
   useYamlEnvParams: 1
   useAutomaticGripper: 1
   hardStopOnHold: 1
-  perStepPenalty: 0.001
+  perStepPenalty: 0.0008
   outOfArenaPenalty: 2
   gentleLinearSpeedThresh: 0.08
   gentleAngularSpeedThresh: 0.15
