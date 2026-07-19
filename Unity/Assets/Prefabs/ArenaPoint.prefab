@@ -465,37 +465,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 6326840295651880450}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &2088940495608158569
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2629130706852722498}
-  m_Layer: 0
-  m_Name: BallSpawnPoint8
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &2629130706852722498
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2088940495608158569}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.18, y: 10.0235, z: 0.68}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 8835198178993767469}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2177165660296564902
 GameObject:
   m_ObjectHideFlags: 0
@@ -1161,37 +1130,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 0.99999994, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!1 &4855912630708682771
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 3398902507117818002}
-  m_Layer: 0
-  m_Name: BallSpawnPoint9
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &3398902507117818002
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4855912630708682771}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.36, y: 10.0235, z: -4.69}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 8835198178993767469}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &4888195374463523207
 GameObject:
   m_ObjectHideFlags: 0
@@ -1370,9 +1308,6 @@ Transform:
   - {fileID: 4872751535100657784}
   - {fileID: 6291003563522627531}
   - {fileID: 5132060502283439722}
-  - {fileID: 2231294148908774291}
-  - {fileID: 2629130706852722498}
-  - {fileID: 3398902507117818002}
   - {fileID: 6326840295651880450}
   - {fileID: 2662588395027316777}
   - {fileID: 6971614648529262260}
@@ -1884,37 +1819,6 @@ Transform:
   - {fileID: 2486158007908747428}
   m_Father: {fileID: 4212372868037608869}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &7436697723079686239
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2231294148908774291}
-  m_Layer: 0
-  m_Name: BallSpawnPoint7
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &2231294148908774291
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7436697723079686239}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -1.32, y: 10.0235, z: -3.89}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 8835198178993767469}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &7582556102321972725
 GameObject:
   m_ObjectHideFlags: 0
@@ -2306,9 +2210,6 @@ PrefabInstance:
       addedObject: {fileID: 434451357782293778}
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 448925899835208303}
-    - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
-      insertIndex: -1
       addedObject: {fileID: 848217477165904138}
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
@@ -2430,37 +2331,6 @@ MonoBehaviour:
   rightIR: 0
   gripperIR: 0
   gripperIRHitObject: {fileID: 0}
---- !u!114 &448925899835208303
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1710318917514631624}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5d1c4e0b1822b495aa52bc52839ecb30, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.ML-Agents::Unity.MLAgents.Policies.BehaviorParameters
-  m_BrainParameters:
-    VectorObservationSize: 15
-    NumStackedVectorObservations: 4
-    m_ActionSpec:
-      m_NumContinuousActions: 3
-      BranchSizes: 03000000
-    VectorActionSize: 
-    VectorActionDescriptions: []
-    VectorActionSpaceType: 0
-    hasUpgradedBrainParametersWithActionSpec: 1
-  m_Model: {fileID: 0}
-  m_InferenceDevice: 0
-  m_BehaviorType: 0
-  m_BehaviorName: GFSX_Brain
-  TeamId: 0
-  m_UseChildSensors: 1
-  m_UseChildActuators: 1
-  m_DeterministicInference: 0
-  m_ObservableAttributeHandling: 0
 --- !u!114 &848217477165904138
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2492,7 +2362,7 @@ MonoBehaviour:
   cameraTargetEmaAlpha: 0.15
   cameraTargetDeadband: 0.05
   arenaCenterOffset: {x: 0, y: 0, z: 2.9}
-  arenaHalfSize: {x: 1.42, y: 1, z: 3.25}
+  arenaHalfSize: {x: 1.4, y: 1, z: 3.2}
   distanceRewardScale: 1
   distanceRewardAlpha: 2
   closeRadius: 0.35
@@ -2538,9 +2408,6 @@ MonoBehaviour:
   - {fileID: 4872751535100657784}
   - {fileID: 6291003563522627531}
   - {fileID: 5132060502283439722}
-  - {fileID: 2231294148908774291}
-  - {fileID: 2629130706852722498}
-  - {fileID: 3398902507117818002}
   randomizeBallMass: 1
   randomizeRobotMass: 1
   randomizeMotors: 1

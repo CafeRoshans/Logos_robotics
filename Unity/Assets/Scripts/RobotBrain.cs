@@ -118,7 +118,7 @@ public class RobotBrain : Agent
     [Header("Blind approach — движение вперёд когда мяч НЕ виден")]
     [Tooltip("Бонус за каждый шаг, когда робот едет вперёд, но мяч ещё не виден. " +
              "Стимулирует активный поиск, а не стояние на месте при потере мяча.")]
-    public float blindApproachBonus = 0.007f; // изменил с 3 до 7, пока робот имеет малую энтропию мб поможет
+    public float blindApproachBonus = 0.004f;
     [Tooltip("Минимальная реальная скорость вперёд (м/с) для срабатывания blindApproachBonus")]
     public float blindApproachMinForwardSpeed = 0.05f;
 
