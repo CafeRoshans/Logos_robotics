@@ -75,4 +75,6 @@ Build/
 *.zip
 Unity_build/
 todo.md
+Linux_Build_*/
 Linux_Build/
+Linux_Build_*.zip
