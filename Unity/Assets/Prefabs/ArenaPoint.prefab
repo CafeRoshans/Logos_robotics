@@ -987,6 +987,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 8835198178993767469}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &4584157782158617759
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6291003563522627531}
+  m_Layer: 0
+  m_Name: BallSpawnPoint5
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6291003563522627531
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4584157782158617759}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0.55, y: 10.0235, z: -4.44}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8835198178993767469}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &4688175601324132240
 GameObject:
   m_ObjectHideFlags: 0
@@ -1275,6 +1306,8 @@ Transform:
   - {fileID: 4519345374274968212}
   - {fileID: 6016700507148416519}
   - {fileID: 4872751535100657784}
+  - {fileID: 6291003563522627531}
+  - {fileID: 5132060502283439722}
   - {fileID: 6326840295651880450}
   - {fileID: 2662588395027316777}
   - {fileID: 6971614648529262260}
@@ -1748,11 +1781,11 @@ Transform:
   m_GameObject: {fileID: 7286025269670888065}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.091, y: 1.257, z: 1.215}
-  m_LocalScale: {x: 1.5515, y: 1.5515, z: 1.5515}
+  m_LocalPosition: {x: 0.004999697, y: 0.43099785, z: 0.3529993}
+  m_LocalScale: {x: 1.5514998, y: 1.5515, z: 1.5515}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 4212372868037608869}
+  m_Father: {fileID: 7170547908202784088}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &7415879186844020836
 GameObject:
@@ -1778,11 +1811,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7415879186844020836}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0.374, y: 1.302, z: -0.034}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 6205411498779532645}
   - {fileID: 2486158007908747428}
   m_Father: {fileID: 4212372868037608869}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -1817,6 +1851,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4212372868037608869}
   m_LocalEulerAnglesHint: {x: 0, y: 40, z: 0}
+--- !u!1 &7713828224212334393
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5132060502283439722}
+  m_Layer: 0
+  m_Name: BallSpawnPoint6
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5132060502283439722
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7713828224212334393}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0.52, y: 10.0235, z: -1.84}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8835198178993767469}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8837246447978056828
 GameObject:
   m_ObjectHideFlags: 0
@@ -2115,9 +2180,6 @@ PrefabInstance:
       addedObject: {fileID: 7332018520604774081}
     - targetCorrespondingSourceObject: {fileID: 514193114368485563, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: 2
-      addedObject: {fileID: 6205411498779532645}
-    - targetCorrespondingSourceObject: {fileID: 514193114368485563, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
-      insertIndex: 3
       addedObject: {fileID: 9079330634662978123}
     - targetCorrespondingSourceObject: {fileID: 7346274463034716826, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
@@ -2144,9 +2206,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 434451357782293778}
-    - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 448925899835208303}
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 848217477165904138}
@@ -2211,7 +2270,7 @@ MonoBehaviour:
     VectorActionDescriptions: []
     VectorActionSpaceType: 1
     hasUpgradedBrainParametersWithActionSpec: 1
-  m_Model: {fileID: 5022602860645237092, guid: 6924c756d6a5f4a279c05575d8ea80f2, type: 3}
+  m_Model: {fileID: 0}
   m_InferenceDevice: 0
   m_BehaviorType: 0
   m_BehaviorName: GFSX_Brain
@@ -2270,37 +2329,6 @@ MonoBehaviour:
   rightIR: 0
   gripperIR: 0
   gripperIRHitObject: {fileID: 0}
---- !u!114 &448925899835208303
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1710318917514631624}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5d1c4e0b1822b495aa52bc52839ecb30, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.ML-Agents::Unity.MLAgents.Policies.BehaviorParameters
-  m_BrainParameters:
-    VectorObservationSize: 15
-    NumStackedVectorObservations: 4
-    m_ActionSpec:
-      m_NumContinuousActions: 3
-      BranchSizes: 03000000
-    VectorActionSize: 
-    VectorActionDescriptions: []
-    VectorActionSpaceType: 0
-    hasUpgradedBrainParametersWithActionSpec: 1
-  m_Model: {fileID: 0}
-  m_InferenceDevice: 0
-  m_BehaviorType: 0
-  m_BehaviorName: GFSX_Brain
-  TeamId: 0
-  m_UseChildSensors: 1
-  m_UseChildActuators: 1
-  m_DeterministicInference: 0
-  m_ObservableAttributeHandling: 0
 --- !u!114 &848217477165904138
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2316,7 +2344,7 @@ MonoBehaviour:
   agentParameters:
     maxStep: 0
   hasUpgradedFromAgentParameters: 1
-  MaxStep: 2000
+  MaxStep: 3500
   tracks: {fileID: 3657878881065950151}
   gripper: {fileID: 1081570319156500118}
   sensors: {fileID: 434451357782293778}
@@ -2325,14 +2353,14 @@ MonoBehaviour:
   cameraServo: {fileID: 7170547908202784088}
   targetBall: {fileID: 2662588395027316777}
   obstacleSpawner: {fileID: 401300216358652757}
-  useRealRobot: 1
+  useRealRobot: 0
   rosBridge: {fileID: 6364411629071752895}
   cameraServoMaxAngle: 90
   cameraMaxStepDeg: 8
   cameraTargetEmaAlpha: 0.15
   cameraTargetDeadband: 0.05
   arenaCenterOffset: {x: 0, y: 0, z: 2.9}
-  arenaHalfSize: {x: 1.42, y: 1, z: 3.25}
+  arenaHalfSize: {x: 1.4, y: 1, z: 3.2}
   distanceRewardScale: 1
   distanceRewardAlpha: 2
   closeRadius: 0.35
@@ -2353,7 +2381,7 @@ MonoBehaviour:
   useYamlEnvParams: 1
   useAutomaticGripper: 1
   hardStopOnHold: 1
-  perStepPenalty: 0.001
+  perStepPenalty: 0.0015
   outOfArenaPenalty: 2
   gentleLinearSpeedThresh: 0.08
   gentleAngularSpeedThresh: 0.15
@@ -2376,6 +2404,8 @@ MonoBehaviour:
   - {fileID: 4519345374274968212}
   - {fileID: 6016700507148416519}
   - {fileID: 4872751535100657784}
+  - {fileID: 6291003563522627531}
+  - {fileID: 5132060502283439722}
   randomizeBallMass: 1
   randomizeRobotMass: 1
   randomizeMotors: 1
