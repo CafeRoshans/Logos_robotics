@@ -1434,14 +1434,22 @@ PrefabInstance:
     - target: {fileID: 448925899835208303, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_Model
       value: 
-      objectReference: {fileID: 5022602860645237092, guid: 67323555709428849bf4d4aac035be75, type: 3}
+      objectReference: {fileID: 5022602860645237092, guid: e2935cf22b1ae44c6bdefe6c4631ff9c, type: 3}
+    - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: useRealRobot
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: perStepPenalty
-      value: 0.002
+      value: 0.001
       objectReference: {fileID: 0}
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: wallProximityPenalty
-      value: 0.01
+      value: 0.015
+      objectReference: {fileID: 0}
+    - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: obstacleRespawnEveryEpisodes
+      value: 1000
       objectReference: {fileID: 0}
     - target: {fileID: 4508390424881706522, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: useManualInput
@@ -1450,6 +1458,10 @@ PrefabInstance:
     - target: {fileID: 5089989243390918077, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_Name
       value: ArenaPoint
+      objectReference: {fileID: 0}
+    - target: {fileID: 6418510954871976499, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: m_TargetDisplay
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 8835198178993767469, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1494,13 +1506,17 @@ PrefabInstance:
     - target: {fileID: 8865409503205789608, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_Model
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 5022602860645237092, guid: 51ef7238850aa408aba3bbe3889bea7a, type: 3}
     - target: {fileID: 8865409503205789608, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_BehaviorType
-      value: 0
+      value: 2
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedComponents:
+    - {fileID: 448925899835208303, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+    m_RemovedGameObjects:
+    - {fileID: 2088940495608158569, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+    - {fileID: 7436697723079686239, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+    - {fileID: 4855912630708682771, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
