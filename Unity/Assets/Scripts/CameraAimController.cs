@@ -23,8 +23,20 @@ public class CameraAimController : MonoBehaviour
 {
     [Header("Ссылка на сервопривод")]
     [Tooltip("Transform, вокруг которого физически крутится камера (Y — поворот/yaw, " +
-             "X — наклон/tilt). Обычно дочерний объект корпуса робота.")]
+             "X — наклон/tilt) — используется, ТОЛЬКО если panPivot/tiltPivot ниже не заданы " +
+             "(старая однотрансформенная схема, оба угла на одном объекте).")]
     public Transform cameraServo;
+
+    [Header("Раздельные pivot'ы (нужны, если на реальном роботе датчики механически " +
+            "связаны только с ОДНОЙ из осей камеры — например, УЗ-датчик крутится с yaw, " +
+            "но не наклоняется с tilt)")]
+    [Tooltip("Внешний pivot — крутится ТОЛЬКО по yaw (горизонталь). Если задан вместе с " +
+             "tiltPivot — привяжи к этому объекту точку УЗ-датчика (VirtualSensors.centerPoint), " +
+             "если на реальном роботе УЗ мехнически связан с горизонтальным поворотом камеры.")]
+    public Transform panPivot;
+    [Tooltip("Внутренний pivot (дочерний panPivot) — крутится ТОЛЬКО по tilt (вертикаль). " +
+             "Сама Camera должна быть дочерней именно этого объекта.")]
+    public Transform tiltPivot;
 
     [Header("Пределы — ПОВОРОТ (yaw, горизонталь)")]
     [Tooltip("Максимальный угол поворота камеры от корпуса, ± градусы. Синхронизируется " +
@@ -183,7 +195,7 @@ public class CameraAimController : MonoBehaviour
                 // ПРОВЕРЬ ЭМПИРИЧЕСКИ: если на практике камера при мяче внизу кадра вместо
                 // наклона вниз задирается вверх — просто убери минус на следующей строке,
                 // это единственное место, которое нужно будет поменять.
-                ApplyTiltStep(Mathf.Sign(pidOutV), tiltStepDeg);
+                ApplyTiltStep(-Mathf.Sign(pidOutV), tiltStepDeg);
             }
         }
         else
@@ -252,8 +264,21 @@ public class CameraAimController : MonoBehaviour
 
     void ApplyRotation()
     {
-        if (cameraServo != null)
+        if (panPivot != null && tiltPivot != null)
+        {
+            // Раздельная схема: yaw только на внешнем pivot, tilt только на внутреннем.
+            // Всё, что физически прикреплено к panPivot (например, VirtualSensors.centerPoint
+            // для УЗ-датчика, если он на реальном роботе крутится вместе с камерой по
+            // горизонтали, но не наклоняется) — получит только горизонтальный поворот.
+            panPivot.localRotation  = Quaternion.Euler(0f, CurrentAngleDeg, 0f);
+            tiltPivot.localRotation = Quaternion.Euler(CurrentTiltDeg, 0f, 0f);
+        }
+        else if (cameraServo != null)
+        {
+            // Фолбэк: старая однотрансформенная схема (оба угла на одном объекте) —
+            // используется, если раздельные pivot'ы не настроены.
             cameraServo.localRotation = Quaternion.Euler(CurrentTiltDeg, CurrentAngleDeg, 0f);
+        }
     }
 
     /// <summary>Полный сброс состояния — вызывай в OnEpisodeBegin.</summary>
@@ -270,7 +295,9 @@ public class CameraAimController : MonoBehaviour
         _lastKnownAngleSign = 1f;
         _pidYaw?.Reset();
         _pidTilt?.Reset();
-        if (cameraServo != null)
+        if (panPivot != null) panPivot.localRotation = Quaternion.identity;
+        if (tiltPivot != null) tiltPivot.localRotation = Quaternion.identity;
+        if (panPivot == null && tiltPivot == null && cameraServo != null)
             cameraServo.localRotation = Quaternion.identity;
     }
 }

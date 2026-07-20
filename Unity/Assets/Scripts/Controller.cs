@@ -35,8 +35,9 @@ public class Controller : MonoBehaviour
              "для стабильности обучения PPO ограничиваем до 0.25. При input=1 → скорость = maxLinearCmd.")]
     public float maxLinearCmd = 0.25f;
 
-    [Tooltip("Максимальная угловая скорость разворота, град/с. 120°/сек как у реального GFS-X.")]
-    public float maxAngularSpeedDeg = 120f;
+    [Tooltip("Максимальная угловая скорость разворота, град/с. Понижена с 120° до 75° " +
+             "по запросу — резкие развороты дестабилизировали физику при столкновениях.")]
+    public float maxAngularSpeedDeg = 75f;
 
     [Header("Параметры PWM (эмуляция реального мотора)")]
     public float motorDeadzone = 10f;
@@ -136,6 +137,19 @@ public class Controller : MonoBehaviour
     void FixedUpdate()
     {
         if (trackWidth < 0.01f) return; // защита от NaN, если точки не назначены
+
+        // Гасим любую скорость/угловую скорость, накопленную физическим движком между
+        // кадрами (например, от импульса столкновения со стеной) — мы двигаем робота
+        // ПОЛНОСТЬЮ через MovePosition/MoveRotation, а не через физическую интеграцию.
+        // Без этого не-кинематический Rigidbody может резко "выстрелить" после удара:
+        // столкновение даёт скачок rb.linearVelocity/angularVelocity, который потом
+        // складывается с нашим собственным MovePosition в следующих кадрах, разгоняя
+        // робота неконтролируемо (вплоть до вылета за границы арены — именно это,
+        // похоже, и обрывало эпизод, а не сам штраф за столкновение). Столкновения
+        // (OnCollisionEnter) при этом продолжают честно обнаруживаться — это зависит
+        // от факта контакта коллайдеров в течение кадра, а не от скорости после него.
+        rb.linearVelocity  = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
 
         float leftCmdSpeed = leftInput * maxLinearCmd;
         float rightCmdSpeed = rightInput * maxLinearCmd;

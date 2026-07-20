@@ -1434,7 +1434,7 @@ PrefabInstance:
     - target: {fileID: 448925899835208303, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_Model
       value: 
-      objectReference: {fileID: 5022602860645237092, guid: d28a74fe873e43746ba8e986ef357103, type: 3}
+      objectReference: {fileID: 5022602860645237092, guid: 67323555709428849bf4d4aac035be75, type: 3}
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: perStepPenalty
       value: 0.002

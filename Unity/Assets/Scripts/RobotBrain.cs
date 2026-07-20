@@ -87,14 +87,15 @@ public class RobotBrain : Agent
     public float closeRadius           = 0.35f;
     [Tooltip("Штраф за резкое изменение gas/steer между шагами. Сглаживает езду.")]
     public float driveRatePenalty  = 0.001f;
-    [Tooltip("Штраф за критически близкую стену (по ИК/УЗ). Каждый сенсор, который срабатывает = " +
-             "-этот штраф/шаг. НАМЕРЕННО маленький: сенсор сам по себе ничего плохого не делает — " +
-             "он просто информирует о мире (близко стена или нет), это не повод для наказания. " +
-             "Наказывать нужно за реальные последствия (см. obstacleCollisionPenalty ниже, который " +
-             "должен быть на порядок больше). Если этот штраф слишком большой, сеть учится избегать " +
-             "самого факта 'видеть препятствие рядом', а не реальных столкновений — это не то " +
-             "поведение, которое нужно (робот должен уметь проезжать близко к стене, если нужно " +
-             "объехать, не боясь самого срабатывания дальномера).")]
+    [Tooltip("Штраф за критически близкую стену — ТОЛЬКО по ИК (leftIR/rightIR, жёстко " +
+             "закреплены на корпусе). УЗ сюда не входит: он механически привязан к горизонтальному " +
+             "повороту камеры (CameraAimController), поэтому его направление не всегда совпадает " +
+             "с направлением движения — штрафовать за его показания было бы наказанием за то, " +
+             "куда автономно смотрит камера, а не за реальную опасность. Каждый ИК, который " +
+             "срабатывает = -этот штраф/шаг. НАМЕРЕННО маленький: сенсор сам по себе ничего плохого " +
+             "не делает — он просто информирует о мире, это не повод для наказания. Наказывать нужно " +
+             "за реальные последствия (см. obstacleCollisionPenalty ниже, который должен быть " +
+             "на порядок больше).")]
     public float wallProximityPenalty   = 0.001f;
 
     [Tooltip("Штраф за окончание эпизода по таймауту")]
@@ -117,9 +118,15 @@ public class RobotBrain : Agent
              "должен доминировать: robot should learn to react to sensors specifically BECAUSE " +
              "collision is expensive, not because proximity itself is punished.")]
     public float  obstacleCollisionPenalty = 4.0f;
-    [Tooltip("Завершать эпизод при столкновении с препятствием/стеной (сильный сигнал, но короче эпизоды). " +
-             "false = только штраф, обучение продолжается.")]
+    [Tooltip("Завершать эпизод при столкновении со СПАВНЯЩИМСЯ ПРЕПЯТСТВИЕМ (obstacleTag). " +
+             "false = только штраф, обучение продолжается (это нормально — препятствия расставлены " +
+             "случайно, лёгкое касание блока не обязательно должно быть фатальным).")]
     public bool   endEpisodeOnObstacleHit  = false;
+    [Tooltip("Завершать эпизод при столкновении со СТЕНОЙ АРЕНЫ (wallTag) — НЕЗАВИСИМО от " +
+             "endEpisodeOnObstacleHit выше. Врезаться в границу арены — более серьёзный провал, " +
+             "чем задеть случайный блок, поэтому по умолчанию true: любое касание стены сразу " +
+             "обрывает эпизод, даже если столкновения с препятствиями штрафуются мягче.")]
+    public bool   endEpisodeOnWallHit      = true;
 
     // wobbleAsymmetryPenalty и steerFlipPenalty удалены — они были нужны, чтобы модель,
     // управляющая напрямую left/right, не ездила зигзагом. С Gas/Steering раскладкой в
@@ -277,7 +284,7 @@ public class RobotBrain : Agent
     public float nominalMaxLinearCmd    = 0.25f;
     [Tooltip("НОМИНАЛЬНЫЙ (не изношенный) максимальный угол разворота, град/с — точка отсчёта " +
              "для maxAngularSpeedDeg. Должна совпадать с дефолтным Controller.maxAngularSpeedDeg.")]
-    public float nominalMaxAngularSpeedDeg = 120f;
+    public float nominalMaxAngularSpeedDeg = 75f;
     [Tooltip("Разброс сглаживания разгона PWM. Больше — медленнее реакция мотора.")]
     public float motorPwmStepMin        = 10f;
     public float motorPwmStepMax        = 20f;
@@ -976,13 +983,20 @@ public class RobotBrain : Agent
             AddReward(rAlign); _rewardCenter += rAlign;
         }
 
-        // г) Штраф за критически близкие стены
+        // г) Штраф за критически близкие стены — ТОЛЬКО по ИК (leftIR/rightIR).
+        //    УЗ (ultrasonicNormalized) сюда сознательно НЕ включён: датчик механически
+        //    привязан к горизонтальному повороту камеры (см. CameraAimController), а не
+        //    к корпусу. Его направление во время поиска мяча может смотреть куда угодно,
+        //    не совпадая с направлением движения — штрафовать за "видит близко" в этом
+        //    случае означало бы наказывать робота за то, куда автономно смотрит камера,
+        //    а не за реальную опасность на пути движения. УЗ остаётся информационным
+        //    наблюдением для сети (см. CollectObservations), просто без отдельной награды.
+        //    ИК же жёстко закреплены на корпусе — их направление стабильно и осмысленно.
         if (sensors != null)
         {
             float wallPen = 0f;
-            if (sensors.ultrasonicNormalized < 0.05f) wallPen += wallProximityPenalty;
-            if (sensors.leftIR  == 1)                 wallPen += wallProximityPenalty;
-            if (sensors.rightIR == 1)                 wallPen += wallProximityPenalty;
+            if (sensors.leftIR  == 1) wallPen += wallProximityPenalty;
+            if (sensors.rightIR == 1) wallPen += wallProximityPenalty;
             if (wallPen > 0f) { AddReward(-wallPen); _rewardWall -= wallPen; }
         }
 
@@ -1312,7 +1326,14 @@ public class RobotBrain : Agent
         AddReward(-obstacleCollisionPenalty);
         _rewardObstacle -= obstacleCollisionPenalty;
 
-        if (endEpisodeOnObstacleHit)
+        // Стена и препятствие теперь решают завершение эпизода НЕЗАВИСИМО друг от друга —
+        // касание стены (границы арены) считается более серьёзным провалом и по умолчанию
+        // всегда обрывает эпизод, даже если столкновения с обычными препятствиями настроены
+        // мягче (только штраф, без завершения).
+        bool shouldEndEpisode = (isWall && endEpisodeOnWallHit)
+                              || (isObstacle && endEpisodeOnObstacleHit);
+
+        if (shouldEndEpisode)
         {
             LogEpisodeStats(success: false);
             EndEpisode();
