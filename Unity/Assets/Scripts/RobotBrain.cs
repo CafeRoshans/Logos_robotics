@@ -8,7 +8,7 @@ using System.Collections.Generic;
 /// <summary>
 /// ML-Agents агент для робота GFS-X.
 /// Настройки Behavior Parameters (задаются в инспекторе):
-///   Vector Observation Space Size = 15
+///   Vector Observation Space Size = 16
 ///   Stacked Vectors               = 4
 ///   Continuous Actions            = 2   (gas [-1..1], steering [-1..1])
 ///   Discrete Branches             = 1 (legacy) или 0 (useAutomaticGripper=true, дефолт)
@@ -361,6 +361,11 @@ public class RobotBrain : Agent
         if (useRealRobot) return yolo != null ? yolo.horizontalAngle : 0f;
         return simCam != null ? simCam.horizontalAngle : 0f;
     }
+    float VisionVerticalAngle()
+    {
+        if (useRealRobot) return yolo != null ? yolo.verticalAngle : 0f;
+        return simCam != null ? simCam.verticalAngle : 0f;
+    }
     float VisionNormalizedDistance()
     {
         if (useRealRobot) return yolo != null ? yolo.normalizedDistance : 1f;
@@ -712,30 +717,41 @@ public class RobotBrain : Agent
         // 8. Флаг видимости
         sensor.AddObservation(visible ? 1f : 0f);
 
-        // 9. Угол сервопривода камеры, нормализованный — теперь это состояние автономного
-        // CameraAimController, а не что-то, что задаёт сеть.
+        // 9. Угол ПОВОРОТА камеры (yaw) относительно корпуса, нормализованный — состояние
+        // автономного CameraAimController, а не что-то, что задаёт сеть.
         float camAngleDeg = cameraAim != null ? cameraAim.CurrentAngleDeg : 0f;
         sensor.AddObservation(Mathf.Clamp(camAngleDeg / Mathf.Max(1f, cameraServoMaxAngle), -1f, 1f));
 
-        // 10. hasBall
+        // 10. Угол НАКЛОНА камеры (tilt) относительно корпуса, нормализованный [-1..1] по
+        // диапазону [cameraAim.minTiltDeg .. cameraAim.maxTiltDeg]. Помогает сети точнее
+        // судить о геометрии — например, отличать "мяч близко и камера сильно опущена"
+        // от "мяч далеко, камера почти горизонтально".
+        float camTiltDeg = cameraAim != null ? cameraAim.CurrentTiltDeg : 0f;
+        float tiltRange = cameraAim != null
+            ? Mathf.Max(0.001f, cameraAim.maxTiltDeg - cameraAim.minTiltDeg)
+            : 1f;
+        float tiltMid = cameraAim != null ? (cameraAim.maxTiltDeg + cameraAim.minTiltDeg) * 0.5f : 0f;
+        sensor.AddObservation(Mathf.Clamp((camTiltDeg - tiltMid) / (tiltRange * 0.5f), -1f, 1f));
+
+        // 11. hasBall
         sensor.AddObservation(gripper != null && gripper.isHolding ? 1f : 0f);
 
-        // 11..12. Смещение от старта X/Z (нормализованное)
+        // 12..13. Смещение от старта X/Z (нормализованное)
         Vector3 delta = transform.position - _startPosition;
         float norm = Mathf.Max(0.001f, Mathf.Max(arenaHalfSize.x, arenaHalfSize.z));
         sensor.AddObservation(delta.x / norm);
         sensor.AddObservation(delta.z / norm);
 
-        // 13. Heading (курс) робота, нормализованный -1..1
+        // 14. Heading (курс) робота, нормализованный -1..1
         float heading = transform.eulerAngles.y;
         if (heading > 180f) heading -= 360f;
         sensor.AddObservation(heading / 180f);
 
-        // 14. Скорость робота (м/с) — вручную посчитанная по дельте позиции,
+        // 15. Скорость робота (м/с) — вручную посчитанная по дельте позиции,
         // а не rb.linearVelocity (для кинематического Rigidbody она всегда 0).
         sensor.AddObservation(_lastVelocity.magnitude);
 
-        // 15. Время с последней детекции мяча (сек)
+        // 16. Время с последней детекции мяча (сек)
         sensor.AddObservation(_timeSinceLastDetection);
     }
 
@@ -756,8 +772,9 @@ public class RobotBrain : Agent
     {
         if (cameraAim == null) return;
         bool visible = SeesBallEffective();
-        float angle = VisionHorizontalAngle();
-        cameraAim.Tick(visible, angle, Time.fixedDeltaTime);
+        float angleH = VisionHorizontalAngle();
+        float angleV = VisionVerticalAngle();
+        cameraAim.Tick(visible, angleH, angleV, Time.fixedDeltaTime);
     }
 
     public override void OnActionReceived(ActionBuffers actions)

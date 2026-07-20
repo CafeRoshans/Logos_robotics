@@ -1713,6 +1713,7 @@ MonoBehaviour:
   cameraComponent: {fileID: 6418510954871976499}
   targetBall: {fileID: 2662588395027316777}
   horizontalFovDegrees: 40
+  verticalFovDegrees: 40
   maxRange: 2
   obstacleMask:
     serializedVersion: 2
@@ -1720,6 +1721,7 @@ MonoBehaviour:
   targetBallTag: TargetBall
   isVisible: 0
   horizontalAngle: 0
+  verticalAngle: 0
   normalizedDistance: 1
   rawDistance: -1
   drawGizmos: 1
@@ -2462,6 +2464,7 @@ MonoBehaviour:
   visibilityTimeout: 0.5
   isVisible: 0
   horizontalAngle: 0
+  verticalAngle: 0
 --- !u!114 &6364411629071752895
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2492,14 +2495,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CameraAimController
   cameraServo: {fileID: 7170547908202784088}
   maxAngleDeg: 45
-  stepDeg: 2.5
+  minTiltDeg: -15
+  maxTiltDeg: 0
+  stepDeg: 2
+  tiltStepDeg: 1
   stepIntervalSeconds: 0.01
   searchStepDeg: 5
+  searchTiltStepDeg: 2
   searchStepIntervalSeconds: 0.02
-  kP: 1.6
+  searchTiltMinDeg: -10
+  searchTiltMaxDeg: 0
+  kP: 1.8
   kI: 0
   kD: 0.3
   centerDeadband: 0.03
+  tiltKp: 1.2
+  tiltKi: 0
+  tiltKd: 0
+  tiltDeadband: 0.03
   holdLastKnownSeconds: 0.3
   searchPauseAtExtremes: 0
 --- !u!1 &3368425570599177975 stripped

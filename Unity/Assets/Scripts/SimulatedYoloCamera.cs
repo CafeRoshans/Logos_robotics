@@ -18,6 +18,13 @@ public class SimulatedYoloCamera : MonoBehaviour
     [Tooltip("Горизонтальный угол обзора камеры (градусы)")]
     public float horizontalFovDegrees = 40f;
 
+    [Tooltip("Вертикальный угол обзора камеры (градусы) — для расчёта verticalAngle. " +
+             "Отдельно от horizontalFovDegrees и от Camera.fieldOfView намеренно: используем " +
+             "свою геометрию (SignedAngle), а не встроенный vp.y — именно vp.y (завязанный на " +
+             "настройки самой Camera, не на этот скрипт) был причиной прошлого бага 'мяч рядом, " +
+             "а камера не видит', когда физический наклон Camera не совпадал с ожиданиями.")]
+    public float verticalFovDegrees = 40f;
+
     [Tooltip("Максимальная дальность детекции мяча (м)")]
     public float maxRange = 2.0f;
 
@@ -30,6 +37,7 @@ public class SimulatedYoloCamera : MonoBehaviour
     // Выходные показания (читает RobotBrain)
     [HideInInspector] public bool  isVisible = false;
     [HideInInspector] public float horizontalAngle = 0f;    // -1..1  (лево..право относительно центра кадра)
+    [HideInInspector] public float verticalAngle   = 0f;    // -1..1  (верх..низ относительно центра кадра)
     [HideInInspector] public float normalizedDistance = 1f; //  0..1  (вплотную..на пределе видимости)
     [HideInInspector] public float rawDistance = -1f;       // м, -1 если не виден
 
@@ -46,24 +54,35 @@ public class SimulatedYoloCamera : MonoBehaviour
     {
         isVisible          = false;
         horizontalAngle    = 0f;
+        verticalAngle      = 0f;
         normalizedDistance = 1f;
         rawDistance        = -1f;
 
         if (cameraComponent == null || targetBall == null) return;
 
-        // 1. Проекция в viewport
-        Vector3 vp = cameraComponent.WorldToViewportPoint(targetBall.position);
-        if (vp.z <= 0f) return;                          // мяч за камерой
-        if (vp.x < 0f || vp.x > 1f) return;              // за границей кадра по X
-        if (vp.y < 0f || vp.y > 1f) return;              // за границей кадра по Y
+        Vector3 toBall = targetBall.position - cameraComponent.transform.position;
 
-        // 2. Горизонтальный угол через геометрию — не зависит от aspect ratio
-        Vector3 toBall     = targetBall.position - cameraComponent.transform.position;
-        Vector3 flatToBall = Vector3.ProjectOnPlane(toBall, cameraComponent.transform.up);
-        float angleFromForward = Vector3.SignedAngle(cameraComponent.transform.forward,
-                                                     flatToBall,
-                                                     cameraComponent.transform.up);
-        if (Mathf.Abs(angleFromForward) > horizontalFovDegrees * 0.5f) return;
+        // Мяч должен быть впереди камеры (не сзади) — проверяем через знак проекции
+        // на forward, не через Camera.WorldToViewportPoint (тот завязан на настройки
+        // самой Camera и был источником прошлого бага — камера не видела мяч рядом
+        // просто потому, что Camera.fieldOfView/наклон не совпадали с тем, что тут настроено).
+        if (Vector3.Dot(toBall, cameraComponent.transform.forward) <= 0f) return; // мяч за камерой
+
+        // 1. Горизонтальный угол через геометрию — не зависит от aspect ratio/FOV Camera
+        Vector3 flatToBallH = Vector3.ProjectOnPlane(toBall, cameraComponent.transform.up);
+        float angleH = Vector3.SignedAngle(cameraComponent.transform.forward,
+                                            flatToBallH,
+                                            cameraComponent.transform.up);
+        if (Mathf.Abs(angleH) > horizontalFovDegrees * 0.5f) return;
+
+        // 2. Вертикальный угол — та же логика, но плоскость перпендикулярна right,
+        // ось поворота — right. Положительный angleV = мяч НИЖЕ центра кадра (см. пояснение
+        // ниже про знак и его использование в CameraAimController).
+        Vector3 flatToBallV = Vector3.ProjectOnPlane(toBall, cameraComponent.transform.right);
+        float angleV = Vector3.SignedAngle(cameraComponent.transform.forward,
+                                            flatToBallV,
+                                            cameraComponent.transform.right);
+        if (Mathf.Abs(angleV) > verticalFovDegrees * 0.5f) return;
 
         // 3. Дальность
         float dist = toBall.magnitude;
@@ -80,7 +99,8 @@ public class SimulatedYoloCamera : MonoBehaviour
 
         // Всё ок — мяч виден
         isVisible          = true;
-        horizontalAngle    = Mathf.Clamp(angleFromForward / (horizontalFovDegrees * 0.5f), -1f, 1f);
+        horizontalAngle    = Mathf.Clamp(angleH / (horizontalFovDegrees * 0.5f), -1f, 1f);
+        verticalAngle      = Mathf.Clamp(angleV / (verticalFovDegrees   * 0.5f), -1f, 1f);
         rawDistance        = dist;
         normalizedDistance = Mathf.Clamp01(dist / maxRange);
     }

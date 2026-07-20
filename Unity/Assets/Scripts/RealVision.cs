@@ -9,7 +9,12 @@ using System.Collections.Concurrent;
 [System.Serializable]
 public class YoloDataPacket
 {
-    public float angle;      // Отклонение центра мяча (-1.0 лево, 1.0 право)
+    public float angle;      // Отклонение центра мяча по горизонтали (-1.0 лево, 1.0 право)
+    public float vAngle;     // Отклонение центра мяча по вертикали (-1.0 верх, 1.0 низ).
+                              // НОВОЕ ПОЛЕ: если Python-сторона (реальный YOLO-пайплайн) ещё не
+                              // шлёт этот ключ в JSON — JsonUtility просто оставит его 0 (не упадёт),
+                              // но регулятор наклона камеры будет получать всегда 0 (не сможет
+                              // отслеживать мяч по вертикали на реальном роботе, пока протокол не обновят).
     public float distance;   // Высота рамки мяча относительно кадра (0..1)
     public float sees;       // Флаг видимости (1.0 = виден, 0.0 = нет)
     public float conf;       // Уверенность детекции
@@ -38,6 +43,7 @@ public class RealVision : MonoBehaviour
 
     [HideInInspector] public bool  isVisible       = false;
     [HideInInspector] public float horizontalAngle = 0f;
+    [HideInInspector] public float verticalAngle   = 0f;
 
     void Start()
     {
@@ -76,6 +82,7 @@ public class RealVision : MonoBehaviour
             {
                 isVisible          = true;
                 horizontalAngle    = Mathf.Clamp(packet.angle, -1f, 1f);
+                verticalAngle      = Mathf.Clamp(packet.vAngle, -1f, 1f);
                 normalizedAngle    = horizontalAngle;
                 normalizedDistance = Mathf.Clamp01(packet.distance);
             }
@@ -83,6 +90,7 @@ public class RealVision : MonoBehaviour
             {
                 isVisible          = false;   // сбрасываем — иначе "видит" навсегда
                 horizontalAngle    = 0f;
+                verticalAngle      = 0f;
                 normalizedAngle    = 0f;
                 normalizedDistance = 1f;
             }
@@ -94,6 +102,7 @@ public class RealVision : MonoBehaviour
         {
             isVisible          = false;
             horizontalAngle    = 0f;
+            verticalAngle      = 0f;
             normalizedDistance = 1f;
         }
     }

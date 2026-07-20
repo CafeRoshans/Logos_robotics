@@ -1,110 +1,147 @@
 using UnityEngine;
 
 /// <summary>
-/// Автономное управление камерой — сеть больше НЕ управляет камерой напрямую. Вместо этого:
-///   1) Пока мяч виден — P(ID)-регулятор держит его в центре кадра.
+/// Автономное управление камерой по ДВУМ осям — сеть НЕ управляет камерой напрямую.
+///   1) Пока мяч виден — P(ID)-регулятор держит его в центре кадра по обеим осям
+///      одновременно: горизонталь (yaw/поворот) и вертикаль (tilt/наклон).
 ///   2) Как только мяч теряется — камера сначала "держит взгляд" на последнем известном
-///      направлении (holdLastKnownSeconds), а затем начинает поиск: качели между
-///      -maxAngleDeg и +maxAngleDeg, СНАЧАЛА в ту сторону, где мяч видели последний раз.
-///   3) Движение камеры всегда ДИСКРЕТНО — шаг stepDeg (1-2°), не чаще, чем раз в
-///      stepIntervalSeconds. Это не костыль поверх PID, а жёсткое физическое ограничение:
-///      реальный дешёвый сервопривод физически не может двигаться плавнее и быстрее.
-///      Именно поэтому сеть (RL), управляя углом напрямую, физически не могла научиться
-///      двигать камеру плавно — плавности взяться неоткуда, если реальное железо на неё
-///      не способно. Теперь плавность и не требуется: PID работает НАД дискретным шагом
-///      (выбирает, В КАКУЮ сторону шагнуть на этом тике), а не пытается выдать
-///      непрерывный угол, который потом придётся квантовать.
+///      направлении (holdLastKnownSeconds), а затем начинает поиск: качели по yaw между
+///      -maxAngleDeg и +maxAngleDeg (СНАЧАЛА в ту сторону, где мяч видели последний раз),
+///      И ОДНОВРЕМЕННО зигзаг по tilt между searchTiltMinDeg и searchTiltMaxDeg — чтобы
+///      обшаривать разную высоту, а не только разворот в одной горизонтальной плоскости.
+///   3) Движение камеры всегда ДИСКРЕТНО (обе оси) — реальный дешёвый сервопривод
+///      физически не может двигаться плавнее и быстрее. PID работает НАД дискретным
+///      шагом (выбирает, в какую сторону шагнуть на этом тике), а не выдаёт непрерывный
+///      угол, который потом пришлось бы квантовать.
 ///
 /// Работает независимо от decision period ML-Agents — вызывается из RobotBrain.FixedUpdate()
-/// каждый физический тик, как и положено автономной "прошивке" реального сервопривода.
-/// Сеть получает угол камеры (CurrentAngleDeg) как наблюдение и учится доворачивать КОРПУС
-/// туда же, куда сейчас смотрит камера (см. bodyCameraAlignmentBonus в RobotBrain) —
-/// это единственное, чему сеть теперь учится в связке с камерой.
+/// каждый физический тик. Сеть получает оба угла камеры (CurrentAngleDeg, CurrentTiltDeg)
+/// как наблюдения и учится доворачивать КОРПУС туда же, куда сейчас смотрит камера
+/// по горизонтали (см. bodyCameraAlignmentBonus в RobotBrain).
 /// </summary>
 public class CameraAimController : MonoBehaviour
 {
     [Header("Ссылка на сервопривод")]
-    [Tooltip("Transform, вокруг Y которого физически крутится камера. Обычно дочерний " +
-             "объект корпуса робота.")]
+    [Tooltip("Transform, вокруг которого физически крутится камера (Y — поворот/yaw, " +
+             "X — наклон/tilt). Обычно дочерний объект корпуса робота.")]
     public Transform cameraServo;
 
-    [Header("Пределы")]
-    [Tooltip("Максимальный угол отклонения камеры от корпуса, ± градусы. Синхронизируется " +
+    [Header("Пределы — ПОВОРОТ (yaw, горизонталь)")]
+    [Tooltip("Максимальный угол поворота камеры от корпуса, ± градусы. Синхронизируется " +
              "с RobotBrain.cameraServoMaxAngle автоматически в Initialize() — не меняй " +
              "тут вручную по отдельности, будет рассинхрон с наблюдением сети. " +
              "Реальная камера GFS-X: <45° в каждую сторону.")]
     public float maxAngleDeg = 45f;
 
-    [Header("Дискретный шаг (эмуляция реального сервопривода)")]
-    [Tooltip("Величина одного физического шага камеры ПРИ СЛЕЖЕНИИ за мячом, градусы. " +
-             "Референс реального железа: 1-2°. Маленький шаг — нужна точность удержания в центре.")]
+    [Header("Пределы — НАКЛОН (tilt, вертикаль)")]
+    [Tooltip("Нижний предел наклона (камера смотрит вниз), градусы. Отрицательный — " +
+             "0 это уровень горизонта, камера никогда не задирается выше горизонта.")]
+    public float minTiltDeg = -10f;
+    [Tooltip("Верхний предел наклона, градусы. По умолчанию 0 — камера не поднимается " +
+             "выше уровня горизонта (мяч на полу физически не бывает выше камеры).")]
+    public float maxTiltDeg = 0f;
+
+    [Header("Дискретный шаг ПРИ СЛЕЖЕНИИ (эмуляция реального сервопривода)")]
+    [Tooltip("Шаг ПОВОРОТА при слежении, градусы. Референс реального железа: 1-2°.")]
     [Range(0.5f, 5f)]
     public float stepDeg = 1.5f;
-    [Tooltip("Минимальный интервал между шагами ПРИ СЛЕЖЕНИИ, сек. Реальный сервопривод не может " +
-             "переставляться чаще этого — при 0.05 сек это ~20 шагов/сек потолок.")]
+    [Tooltip("Шаг НАКЛОНА при слежении, градусы. Диапазон наклона узкий (обычно 10°), " +
+             "поэтому шаг обычно чуть меньше, чем у поворота.")]
+    [Range(0.25f, 5f)]
+    public float tiltStepDeg = 1f;
+    [Tooltip("Минимальный интервал между шагами ПРИ СЛЕЖЕНИИ, сек (общий для обеих осей — " +
+             "реальный серво-контроллер обычно обновляет оба канала одним тактом). " +
+             "При 0.05 сек это ~20 шагов/сек потолок.")]
     [Range(0.01f, 0.5f)]
     public float stepIntervalSeconds = 0.05f;
 
     [Header("Скорость ПОИСКА при потере мяча (отдельно от слежения)")]
-    [Tooltip("Шаг камеры ВО ВРЕМЯ ПОИСКА (качели), градусы. Больше, чем stepDeg — при поиске " +
-             "точность не нужна, важна скорость обзора всего диапазона.")]
+    [Tooltip("Шаг ПОВОРОТА во время поиска (качели), градусы. Больше, чем stepDeg — " +
+             "при поиске точность не нужна, важна скорость обзора всего диапазона.")]
     [Range(0.5f, 15f)]
     public float searchStepDeg = 4f;
-    [Tooltip("Интервал между шагами ВО ВРЕМЯ ПОИСКА, сек. Меньше, чем stepIntervalSeconds — " +
-             "камера шагает чаще, поиск идёт быстрее. Комбинируется с searchStepDeg: " +
-             "итоговая угловая скорость поиска = searchStepDeg / searchStepIntervalSeconds.")]
+    [Tooltip("Шаг НАКЛОНА во время поиска (зигзаг вверх-вниз), градусы. Диапазон поиска " +
+             "по наклону (searchTiltMinDeg..searchTiltMaxDeg) узкий, поэтому шаг небольшой — " +
+             "зигзаг должен успевать несколько раз качнуться, пока идёт один проход по yaw.")]
+    [Range(0.25f, 5f)]
+    public float searchTiltStepDeg = 2f;
+    [Tooltip("Интервал между шагами ВО ВРЕМЯ ПОИСКА, сек (общий для обеих осей). Меньше, " +
+             "чем stepIntervalSeconds — камера шагает чаще, поиск идёт быстрее.")]
     [Range(0.005f, 0.2f)]
     public float searchStepIntervalSeconds = 0.02f;
+    [Tooltip("Нижний предел наклона ВО ВРЕМЯ ПОИСКА (уже, чем minTiltDeg слежения — " +
+             "поиск специально не задирает камеру в крайние положения, обшаривает " +
+             "более узкую, вероятную по высоте зону).")]
+    public float searchTiltMinDeg = -5f;
+    [Tooltip("Верхний предел наклона ВО ВРЕМЯ ПОИСКА.")]
+    public float searchTiltMaxDeg = 0f;
 
-    [Header("Слежение за мячом (PID)")]
-    [Tooltip("Пропорциональный коэффициент. Больше — резче реагирует на смещение мяча от центра.")]
+    [Header("Слежение за мячом (PID) — ПОВОРОТ")]
+    [Tooltip("Пропорциональный коэффициент поворота. Больше — резче реагирует на смещение мяча от центра.")]
     public float kP = 1.6f;
-    [Tooltip("Интегральный коэффициент. Обычно 0 — для этой задачи P уже достаточно; " +
-             "включай, только если камера стабильно не дотягивает мяч точно до центра.")]
     public float kI = 0f;
-    [Tooltip("Дифференциальный коэффициент. Обычно 0 — гасит перелёты при быстро " +
-             "движущемся мяче, но может усиливать шум детекции.")]
     public float kD = 0f;
-    [Tooltip("Мёртвая зона по ошибке (мяч уже в кадре, -1..1, 0 = центр). Внутри неё шаг " +
+    [Tooltip("Мёртвая зона по горизонтальной ошибке (-1..1, 0 = центр). Внутри неё шаг " +
              "не делается — иначе камера будет дрожать туда-сюда ровно в центре из-за шума YOLO.")]
     [Range(0f, 0.3f)]
     public float centerDeadband = 0.03f;
 
+    [Header("Слежение за мячом (PID) — НАКЛОН")]
+    [Tooltip("Пропорциональный коэффициент наклона.")]
+    public float tiltKp = 1.6f;
+    public float tiltKi = 0f;
+    public float tiltKd = 0f;
+    [Tooltip("Мёртвая зона по вертикальной ошибке (-1..1, 0 = центр).")]
+    [Range(0f, 0.3f)]
+    public float tiltDeadband = 0.03f;
+
     [Header("Поиск мяча при потере")]
     [Tooltip("Сколько секунд камера просто ждёт на месте (смотрит в последнее известное " +
-             "направление), прежде чем начать активный поиск качелями.")]
+             "направление), прежде чем начать активный поиск.")]
     public float holdLastKnownSeconds = 1.0f;
-    [Tooltip("Пауза на каждом крайнем положении (±maxAngleDeg) перед разворотом в другую " +
-             "сторону, сек. Без паузы качели выглядят рывком на границе диапазона.")]
+    [Tooltip("Пауза на каждом крайнем положении ПО ПОВОРОТУ (±maxAngleDeg) перед разворотом " +
+             "в другую сторону, сек. Наклон паузу не делает — он просто зигзагует непрерывно, " +
+             "пока идёт поиск по повороту (по замыслу это как раз и создаёт 'зигзаг').")]
     public float searchPauseAtExtremes = 0.3f;
 
-    /// <summary>Текущий угол камеры относительно корпуса, градусы. Читает RobotBrain
-    /// для наблюдения сети и для награды bodyCameraAlignmentBonus.</summary>
+    /// <summary>Текущий угол ПОВОРОТА камеры относительно корпуса, градусы (0 = прямо вперёд).
+    /// Читает RobotBrain для наблюдения сети и для награды bodyCameraAlignmentBonus.</summary>
     public float CurrentAngleDeg { get; private set; }
 
-    PidController _pid;
+    /// <summary>Текущий угол НАКЛОНА камеры, градусы (0 = уровень горизонта, отрицательные — вниз).
+    /// Читает RobotBrain для наблюдения сети.</summary>
+    public float CurrentTiltDeg { get; private set; }
+
+    PidController _pidYaw;
+    PidController _pidTilt;
+
     float _timeSinceStep;
     float _lostTimer;
     bool  _searching;
-    int   _searchDir = 1;
+
+    int   _searchDir = 1;             // направление качелей по yaw: +1/-1
     float _searchPauseTimer;
-    float _lastKnownAngleSign = 1f;
+    float _lastKnownAngleSign = 1f;   // в какую сторону по yaw искать сначала
+
+    int   _searchTiltDir = -1;        // направление зигзага по tilt: начинаем движение вниз
 
     void Awake()
     {
-        _pid = new PidController(kP, kI, kD);
+        _pidYaw  = new PidController(kP, kI, kD);
+        _pidTilt = new PidController(tiltKp, tiltKi, tiltKd);
     }
 
     /// <summary>
     /// Вызывается каждый физический тик из RobotBrain.FixedUpdate() — НЕ привязано
     /// к decision period ML-Agents, ровно как и работала бы реальная прошивка серво.
     /// </summary>
-    /// <param name="ballVisible">Видит ли робот мяч ПРЯМО СЕЙЧАС (с учётом burst dropout —
-    /// та же видимость, что использует и RL-наблюдение, для физической согласованности).</param>
-    /// <param name="rawHorizontalAngle">"Сырой" (без синтетического шума для RL) угол
-    /// смещения мяча от центра кадра, -1 (лево) .. +1 (право) — соглашение как в RealVision.cs.</param>
+    /// <param name="ballVisible">Видит ли робот мяч ПРЯМО СЕЙЧАС (с учётом burst dropout).</param>
+    /// <param name="rawHorizontalAngle">"Сырой" угол смещения мяча по горизонтали от центра
+    /// кадра, -1 (лево) .. +1 (право).</param>
+    /// <param name="rawVerticalAngle">"Сырой" угол смещения мяча по вертикали от центра кадра,
+    /// -1 (верх) .. +1 (низ) — соглашение как в SimulatedYoloCamera/RealVision.</param>
     /// <param name="dt">Time.fixedDeltaTime.</param>
-    public void Tick(bool ballVisible, float rawHorizontalAngle, float dt)
+    public void Tick(bool ballVisible, float rawHorizontalAngle, float rawVerticalAngle, float dt)
     {
         _timeSinceStep += dt;
 
@@ -115,18 +152,39 @@ public class CameraAimController : MonoBehaviour
             _searchPauseTimer = 0f;
             _lastKnownAngleSign = rawHorizontalAngle >= 0f ? 1f : -1f;
 
-            float error = rawHorizontalAngle;
-            if (Mathf.Abs(error) < centerDeadband)
-            {
-                _pid.Reset(); // не копим интеграл, пока и так в допуске
-                return;
-            }
+            float errorH = rawHorizontalAngle;
+            float errorV = rawVerticalAngle;
+
+            bool needStepH = Mathf.Abs(errorH) >= centerDeadband;
+            bool needStepV = Mathf.Abs(errorV) >= tiltDeadband;
+
+            // Не копим интеграл там, где и так в допуске по этой оси.
+            if (!needStepH) _pidYaw.Reset();
+            if (!needStepV) _pidTilt.Reset();
+
+            if (!needStepH && !needStepV) return; // обе оси в допуске — делать нечего
 
             if (_timeSinceStep < stepIntervalSeconds) return; // физический предел частоты шагов
             _timeSinceStep = 0f;
 
-            float pidOut = _pid.Update(error, stepIntervalSeconds);
-            ApplyStep(Mathf.Sign(pidOut), stepDeg);
+            if (needStepH)
+            {
+                float pidOutH = _pidYaw.Update(errorH, stepIntervalSeconds);
+                ApplyYawStep(Mathf.Sign(pidOutH), stepDeg);
+            }
+
+            if (needStepV)
+            {
+                float pidOutV = _pidTilt.Update(errorV, stepIntervalSeconds);
+                // errorV положительный = мяч НИЖЕ центра кадра (соглашение из SimulatedYoloCamera).
+                // Чтобы центрировать, камере нужно наклониться ВНИЗ, то есть УМЕНЬШИТЬ
+                // CurrentTiltDeg (0 = горизонт, отрицательные значения = вниз). Поэтому шаг
+                // берётся с ОБРАТНЫМ знаком относительно pidOutV.
+                // ПРОВЕРЬ ЭМПИРИЧЕСКИ: если на практике камера при мяче внизу кадра вместо
+                // наклона вниз задирается вверх — просто убери минус на следующей строке,
+                // это единственное место, которое нужно будет поменять.
+                ApplyTiltStep(Mathf.Sign(pidOutV), tiltStepDeg);
+            }
         }
         else
         {
@@ -142,11 +200,12 @@ public class CameraAimController : MonoBehaviour
                 _searchPauseTimer = 0f;
             }
 
-            // Поиск использует СВОИ, более быстрые параметры (searchStepDeg/searchStepIntervalSeconds) —
-            // при поиске точность не нужна, важна скорость обзора всего диапазона.
+            // Поиск использует СВОИ, более быстрые параметры — при поиске точность не нужна,
+            // важна скорость обзора всего диапазона по обеим осям.
             if (_timeSinceStep < searchStepIntervalSeconds) return;
             _timeSinceStep = 0f;
 
+            // --- Поворот: качели с паузой на краях ---
             bool atExtreme = (_searchDir > 0 && CurrentAngleDeg >= maxAngleDeg - 0.01f)
                            || (_searchDir < 0 && CurrentAngleDeg <= -maxAngleDeg + 0.01f);
             if (atExtreme)
@@ -157,32 +216,60 @@ public class CameraAimController : MonoBehaviour
                     _searchDir *= -1;
                     _searchPauseTimer = 0f;
                 }
-                return; // стоим на краю (либо ещё копим паузу, либо только что развернулись)
+            }
+            else
+            {
+                ApplyYawStep(_searchDir, searchStepDeg);
             }
 
-            ApplyStep(_searchDir, searchStepDeg);
+            // --- Наклон: непрерывный зигзаг между searchTiltMinDeg/MaxDeg, БЕЗ паузы —
+            // именно это и создаёт "зигзагом", пока поворот идёт своими качелями отдельно. ---
+            bool tiltAtExtreme = (_searchTiltDir > 0 && CurrentTiltDeg >= searchTiltMaxDeg - 0.01f)
+                               || (_searchTiltDir < 0 && CurrentTiltDeg <= searchTiltMinDeg + 0.01f);
+            if (tiltAtExtreme) _searchTiltDir *= -1;
+            ApplyTiltStep(_searchTiltDir, searchTiltStepDeg, searchTiltMinDeg, searchTiltMaxDeg);
         }
     }
 
-    void ApplyStep(float direction, float stepSizeDeg)
+    void ApplyYawStep(float direction, float stepSizeDeg)
     {
         if (direction == 0f) return;
         CurrentAngleDeg = Mathf.Clamp(CurrentAngleDeg + Mathf.Sign(direction) * stepSizeDeg, -maxAngleDeg, maxAngleDeg);
+        ApplyRotation();
+    }
+
+    void ApplyTiltStep(float direction, float stepSizeDeg)
+    {
+        ApplyTiltStep(direction, stepSizeDeg, minTiltDeg, maxTiltDeg);
+    }
+
+    void ApplyTiltStep(float direction, float stepSizeDeg, float clampMin, float clampMax)
+    {
+        if (direction == 0f) return;
+        CurrentTiltDeg = Mathf.Clamp(CurrentTiltDeg + Mathf.Sign(direction) * stepSizeDeg, clampMin, clampMax);
+        ApplyRotation();
+    }
+
+    void ApplyRotation()
+    {
         if (cameraServo != null)
-            cameraServo.localRotation = Quaternion.Euler(0f, CurrentAngleDeg, 0f);
+            cameraServo.localRotation = Quaternion.Euler(CurrentTiltDeg, CurrentAngleDeg, 0f);
     }
 
     /// <summary>Полный сброс состояния — вызывай в OnEpisodeBegin.</summary>
     public void ResetState()
     {
         CurrentAngleDeg = 0f;
+        CurrentTiltDeg  = 0f;
         _lostTimer = 0f;
         _searching = false;
         _searchPauseTimer = 0f;
         _timeSinceStep = 0f;
         _searchDir = 1;
+        _searchTiltDir = -1;
         _lastKnownAngleSign = 1f;
-        _pid?.Reset();
+        _pidYaw?.Reset();
+        _pidTilt?.Reset();
         if (cameraServo != null)
             cameraServo.localRotation = Quaternion.identity;
     }
