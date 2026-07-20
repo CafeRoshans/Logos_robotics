@@ -2346,7 +2346,7 @@ MonoBehaviour:
   agentParameters:
     maxStep: 0
   hasUpgradedFromAgentParameters: 1
-  MaxStep: 2000
+  MaxStep: 3500
   tracks: {fileID: 3657878881065950151}
   gripper: {fileID: 1081570319156500118}
   sensors: {fileID: 434451357782293778}
@@ -2363,7 +2363,7 @@ MonoBehaviour:
   cameraTargetDeadband: 0.05
   arenaCenterOffset: {x: 0, y: 0, z: 2.9}
   arenaHalfSize: {x: 1.4, y: 1, z: 3.2}
-  distanceRewardScale: 2
+  distanceRewardScale: 1
   distanceRewardAlpha: 2
   closeRadius: 0.35
   driveRatePenalty: 0.001
@@ -2383,7 +2383,7 @@ MonoBehaviour:
   useYamlEnvParams: 1
   useAutomaticGripper: 1
   hardStopOnHold: 1
-  perStepPenalty: 0.0008
+  perStepPenalty: 0.0015
   outOfArenaPenalty: 2
   gentleLinearSpeedThresh: 0.08
   gentleAngularSpeedThresh: 0.15
