@@ -863,6 +863,37 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 0.99999994, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!1 &3549561032614696942
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8909117039279424027}
+  m_Layer: 0
+  m_Name: BallSpawnPoint8
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8909117039279424027
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3549561032614696942}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.52, y: 10.0235, z: 0.516}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8835198178993767469}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &3641248168635611334
 GameObject:
   m_ObjectHideFlags: 0
@@ -888,7 +919,7 @@ Transform:
   m_GameObject: {fileID: 3641248168635611334}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.21742865, y: 150.50027, z: -0.399497}
+  m_LocalPosition: {x: -0.343, y: 150.50027, z: -0.399497}
   m_LocalScale: {x: 0.3174603, y: 999.9999, z: 0.15151516}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -919,7 +950,7 @@ Transform:
   m_GameObject: {fileID: 4265963055063686377}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.2589999, y: 150.50027, z: -0.061921228}
+  m_LocalPosition: {x: 0.2589999, y: 150.50027, z: -0.363}
   m_LocalScale: {x: 0.3174603, y: 999.9999, z: 0.15151516}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1130,6 +1161,37 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 0.99999994, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!1 &4798669542375692640
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8332362553807593621}
+  m_Layer: 0
+  m_Name: BallSpawnPoint9
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8332362553807593621
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4798669542375692640}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.398, y: 10.0235, z: -3.677}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8835198178993767469}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &4888195374463523207
 GameObject:
   m_ObjectHideFlags: 0
@@ -1308,6 +1370,9 @@ Transform:
   - {fileID: 4872751535100657784}
   - {fileID: 6291003563522627531}
   - {fileID: 5132060502283439722}
+  - {fileID: 7687621192102932119}
+  - {fileID: 8909117039279424027}
+  - {fileID: 8332362553807593621}
   - {fileID: 6326840295651880450}
   - {fileID: 2662588395027316777}
   - {fileID: 6971614648529262260}
@@ -1947,6 +2012,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 6326840295651880450}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &9138607476026436573
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7687621192102932119}
+  m_Layer: 0
+  m_Name: BallSpawnPoint7
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7687621192102932119
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9138607476026436573}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.36, y: 10.0235, z: -3.63}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8835198178993767469}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &4420174354059537694
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2412,6 +2508,10 @@ MonoBehaviour:
   - {fileID: 4872751535100657784}
   - {fileID: 6291003563522627531}
   - {fileID: 5132060502283439722}
+  - {fileID: 7687621192102932119}
+  - {fileID: 8909117039279424027}
+  - {fileID: 8332362553807593621}
+  ballSpawnCount: -1
   randomizeBallMass: 1
   ballMassMean: 0.08
   ballMassStddev: 0.02
