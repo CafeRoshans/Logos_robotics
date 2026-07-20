@@ -219,6 +219,10 @@ public class RobotBrain : Agent
              "из obstacleSpawner.unusedPoints (старое поведение). Приоритетнее чем unusedPoints.")]
     public Transform[] ballSpawnPoints;
 
+    [Tooltip("Сколько первых точек из ballSpawnPoints использовать. -1 = все. " +
+             "Читается из yaml (ball_spawn_count) для curriculum: сначала 1 фикс. точка, потом все 9.")]
+    public int ballSpawnCount = -1;
+
     [Header("Рандомизация массы мяча")]
     [Tooltip("На каждом эпизоде мяч получает случайную массу (Gaussian). " +
              "Помогает обучить полиси быть устойчивой к разной инерции мяча.")]
@@ -476,11 +480,16 @@ public class RobotBrain : Agent
         }
 
         // --- Позиция мяча: случайная из ballSpawnPoints (например, 4 бортика арены) ---
-        if (ballSpawnPoints != null && ballSpawnPoints.Length > 0)
+        if (shouldRespawn && ballSpawnPoints != null && ballSpawnPoints.Length > 0)
         {
-            // Собираем валидные точки (не null, не NaN-позиция)
+            // ball_spawn_count ограничивает сколько первых точек активно (curriculum).
+            // -1 или 0 = все точки; иначе берём первые N.
+            int limit = (ballSpawnCount > 0) ? Mathf.Min(ballSpawnCount, ballSpawnPoints.Length)
+                                             : ballSpawnPoints.Length;
+
+            // Собираем валидные точки среди первых `limit` (не null, не NaN-позиция)
             int validCount = 0;
-            for (int i = 0; i < ballSpawnPoints.Length; i++)
+            for (int i = 0; i < limit; i++)
                 if (ballSpawnPoints[i] != null && IsValid(ballSpawnPoints[i].position))
                     validCount++;
 
@@ -489,7 +498,7 @@ public class RobotBrain : Agent
                 // Выбираем случайную по индексу среди валидных
                 int pick = Random.Range(0, validCount);
                 int idx = 0;
-                for (int i = 0; i < ballSpawnPoints.Length; i++)
+                for (int i = 0; i < limit; i++)
                 {
                     if (ballSpawnPoints[i] == null || !IsValid(ballSpawnPoints[i].position)) continue;
                     if (idx == pick) { ballPos = ballSpawnPoints[i].position; break; }
@@ -498,7 +507,7 @@ public class RobotBrain : Agent
             }
             else
             {
-                Debug.LogWarning($"[{name}] ballSpawnPoints не содержит валидных точек, использую _ballStartPosition.");
+                Debug.LogWarning($"[{name}] ballSpawnPoints не содержит валидных точек (limit={limit}), использую _ballStartPosition.");
             }
 
             // Если мяч оказался слишком близко к роботу (робот заспавнился рядом
@@ -1202,6 +1211,16 @@ public class RobotBrain : Agent
         // ── Препятствия (curriculum) ─────────────────────────────────────────
         { float v = env.GetWithDefault("obstacle_count", -1f);
           if (v >= 0f && obstacleSpawner != null) obstacleSpawner.spawnCount = (int)v; }
+
+        // ── Точки спавна мяча (curriculum) ───────────────────────────────────
+        // 1 = только первая точка (простой этап), 9 = все точки (полная рандомизация)
+        { float v = env.GetWithDefault("ball_spawn_count", -1f);
+          if (v >= 0f) ballSpawnCount = (int)v; }
+
+        // ── Respawn препятствий ───────────────────────────────────────────────
+        // 1 = каждый эпизод, N = каждые N эпизодов, 0 = никогда
+        { float v = env.GetWithDefault("obstacle_respawn_every", -1f);
+          if (v >= 0f) obstacleRespawnEveryEpisodes = (int)v; }
 
         // ── Distance reward ──────────────────────────────────────────────────
         { float v = env.GetWithDefault("distance_reward_scale", -1f);
