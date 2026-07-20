@@ -311,6 +311,18 @@ public class RobotBrain : Agent
     private int   _framesBallVisible = 0;
     private int   _framesTotal       = 0;
     private float _speedAccum        = 0f;
+
+    // --- Welford online std между эпизодами (сбрасывается в Initialize, не OnEpisodeBegin) ---
+    // Для каждого компонента хранятся mean и M2; std = sqrt(M2 / (n-1))
+    private int   _wN    = 0;
+    private float _wM_dist,  _wM2_dist;
+    private float _wM_wall,  _wM2_wall;
+    private float _wM_obs,   _wM2_obs;
+    private float _wM_ctr,   _wM2_ctr;
+    private float _wM_drv,   _wM2_drv;
+    private float _wM_cam,   _wM2_cam;
+    private float _wM_step,  _wM2_step;
+    private float _wM_term,  _wM2_term;
     private int   _dropoutBurstsCount = 0; // сколько burst dropout произошло за эпизод
 
     private Queue<float[]> actionBuffer = new Queue<float[]>();
@@ -386,6 +398,17 @@ public class RobotBrain : Agent
         // ещё ДО первого OnEpisodeBegin.
         InitSensorBuffer();
         InitActionBuffer();
+
+        // Welford-статистика межэпизодная — сбрасываем только при полном рестарте агента
+        _wN = 0;
+        _wM_dist = _wM2_dist = 0f;
+        _wM_wall = _wM2_wall = 0f;
+        _wM_obs  = _wM2_obs  = 0f;
+        _wM_ctr  = _wM2_ctr  = 0f;
+        _wM_drv  = _wM2_drv  = 0f;
+        _wM_cam  = _wM2_cam  = 0f;
+        _wM_step = _wM2_step = 0f;
+        _wM_term = _wM2_term = 0f;
     }
 
     void InitSensorBuffer()
@@ -599,19 +622,31 @@ public class RobotBrain : Agent
         _dropoutStepsLeft  = 0;
         _prevHeadingDeg    = transform.eulerAngles.y;
 
-        // Симуляция латентности реального ROS2 pipeline
-        currentActionLatency = (int)UnityEngine.Random.Range(8.14f, 12.14f);
-        InitActionBuffer();
-
-        // Sensor buffer — задержка датчиков (независимо от action latency)
-        InitSensorBuffer();
-
-        // Читаем yaml environment_parameters — обновляет ball_mass/scale, шумы, latency.
-        // Вызывается ПОСЛЕ базовой рандомизации, чтобы yaml мог её переопределить.
+        // Читаем yaml environment_parameters — награды, физика, шумы, latency.
+        // Вызывается ДО инициализации буферов — yaml может переопределить latency,
+        // и буферы нужно заполнять уже с актуальными значениями.
+        // Базовый латенси actions: fallback когда useYamlEnvParams=false.
+        currentActionLatency = (int)UnityEngine.Random.Range(8f, 13f);
         ReadYamlEnvParams();
+
+        // Буферы инициализируем ПОСЛЕ yaml — используют актуальные latency-значения.
+        InitActionBuffer();
+        InitSensorBuffer();
     }
 
     // Гауссов шум через Box-Muller
+    // Алгоритм Уэлфорда: online mean + variance за O(1) без хранения истории.
+    // Вызывать последовательно для каждого нового значения x.
+    static void WelfordUpdate(float x, ref float mean, ref float M2, int n)
+    {
+        float delta = x - mean;
+        mean += delta / n;
+        M2   += delta * (x - mean);
+    }
+    // std = sqrt(M2 / (n-1)), sample std. Возвращает 0 пока n < 2.
+    static float WelfordStd(float M2, int n) =>
+        n < 2 ? 0f : Mathf.Sqrt(M2 / (n - 1));
+
     static float Gaussian(float stddev) {
         float u1 = 1f - Random.value;
         float u2 = 1f - Random.value;
@@ -1029,6 +1064,29 @@ public class RobotBrain : Agent
         s.Add("Custom/Reward/Step",      _rewardStep);
         s.Add("Custom/Reward/Terminal",  _rewardTerminal);
 
+        // Стандартное отклонение между эпизодами (алгоритм Уэлфорда).
+        // Показывает стабильность: падающий std = агент ведёт себя всё предсказуемее.
+        _wN++;
+        WelfordUpdate(_rewardDistance,  ref _wM_dist, ref _wM2_dist, _wN);
+        WelfordUpdate(_rewardWall,      ref _wM_wall, ref _wM2_wall, _wN);
+        WelfordUpdate(_rewardObstacle,  ref _wM_obs,  ref _wM2_obs,  _wN);
+        WelfordUpdate(_rewardCenter,    ref _wM_ctr,  ref _wM2_ctr,  _wN);
+        WelfordUpdate(_rewardDriveRate, ref _wM_drv,  ref _wM2_drv,  _wN);
+        WelfordUpdate(_rewardCamRate,   ref _wM_cam,  ref _wM2_cam,  _wN);
+        WelfordUpdate(_rewardStep,      ref _wM_step, ref _wM2_step, _wN);
+        WelfordUpdate(_rewardTerminal,  ref _wM_term, ref _wM2_term, _wN);
+        if (_wN >= 2)
+        {
+            s.Add("Custom/Std/Distance",  WelfordStd(_wM2_dist, _wN));
+            s.Add("Custom/Std/Wall",      WelfordStd(_wM2_wall, _wN));
+            s.Add("Custom/Std/Obstacle",  WelfordStd(_wM2_obs,  _wN));
+            s.Add("Custom/Std/Center",    WelfordStd(_wM2_ctr,  _wN));
+            s.Add("Custom/Std/DriveRate", WelfordStd(_wM2_drv,  _wN));
+            s.Add("Custom/Std/CamRate",   WelfordStd(_wM2_cam,  _wN));
+            s.Add("Custom/Std/Step",      WelfordStd(_wM2_step, _wN));
+            s.Add("Custom/Std/Terminal",  WelfordStd(_wM2_term, _wN));
+        }
+
         // Сколько шагов за эпизод робот провёл в Phase 2 (близко к мячу)
         s.Add("Custom/Phase2Steps", _phase2Steps);
 
@@ -1116,35 +1174,106 @@ public class RobotBrain : Agent
         if (!useYamlEnvParams) return;
         var env = Academy.Instance.EnvironmentParameters;
 
-        // Ball: mass, scale
+        // ── Мяч: масса, размер ──────────────────────────────────────────────
         if (targetBall != null)
         {
             var brb = targetBall.GetComponent<Rigidbody>();
             if (brb != null && !brb.isKinematic)
             {
-                float yamlBallMass = env.GetWithDefault("ball_mass", -1f);
-                if (yamlBallMass > 0f) brb.mass = yamlBallMass;
+                float v = env.GetWithDefault("ball_mass", -1f);
+                if (v > 0f) brb.mass = v;
             }
-            float yamlBallScale = env.GetWithDefault("ball_scale", -1f);
-            if (yamlBallScale > 0.001f) targetBall.localScale = Vector3.one * yamlBallScale;
+            float s = env.GetWithDefault("ball_scale", -1f);
+            if (s > 0.001f) targetBall.localScale = Vector3.one * s;
         }
 
-        // Noise
-        float yamlVisionNoise = env.GetWithDefault("vision_noise", -1f);
-        if (yamlVisionNoise >= 0f)
-        {
-            visionAngleNoise    = yamlVisionNoise;
-            visionDistanceNoise = yamlVisionNoise * 3f;
-        }
-        float yamlUsNoise = env.GetWithDefault("ultrasonic_noise", -1f);
-        if (yamlUsNoise >= 0f) ultrasonicNoise = yamlUsNoise;
+        // ── Шум наблюдений ──────────────────────────────────────────────────
+        { float v = env.GetWithDefault("vision_noise", -1f);
+          if (v >= 0f) { visionAngleNoise = v; visionDistanceNoise = v * 3f; } }
+        { float v = env.GetWithDefault("ultrasonic_noise", -1f);
+          if (v >= 0f) ultrasonicNoise = v; }
 
-        // Latency
-        float yamlSensorLat = env.GetWithDefault("sensor_latency", -1f);
-        if (yamlSensorLat >= 0f) sensorLatencySteps = Mathf.Max(0, (int)yamlSensorLat);
-        float yamlActionLat = env.GetWithDefault("action_latency", -1f);
-        if (yamlActionLat >= 0f) currentActionLatency = Mathf.Max(0, (int)yamlActionLat);
+        // ── Латентность ─────────────────────────────────────────────────────
+        { float v = env.GetWithDefault("sensor_latency", -1f);
+          if (v >= 0f) sensorLatencySteps = Mathf.Max(0, (int)v); }
+        { float v = env.GetWithDefault("action_latency", -1f);
+          if (v >= 0f) currentActionLatency = Mathf.Max(0, (int)v); }
 
+        // ── Препятствия (curriculum) ─────────────────────────────────────────
+        { float v = env.GetWithDefault("obstacle_count", -1f);
+          if (v >= 0f && obstacleSpawner != null) obstacleSpawner.spawnCount = (int)v; }
+
+        // ── Distance reward ──────────────────────────────────────────────────
+        { float v = env.GetWithDefault("distance_reward_scale", -1f);
+          if (v >= 0f) distanceRewardScale = v; }
+        { float v = env.GetWithDefault("distance_reward_alpha", -1f);
+          if (v >= 0f) distanceRewardAlpha = v; }
+        { float v = env.GetWithDefault("close_radius", -1f);
+          if (v >= 0f) closeRadius = v; }
+
+        // ── Action rate penalties ────────────────────────────────────────────
+        { float v = env.GetWithDefault("drive_rate_penalty", -1f);
+          if (v >= 0f) driveRatePenalty = v; }
+        { float v = env.GetWithDefault("camera_rate_penalty", -1f);
+          if (v >= 0f) cameraRatePenalty = v; }
+
+        // ── Wall / obstacle ──────────────────────────────────────────────────
+        { float v = env.GetWithDefault("wall_proximity_penalty", -1f);
+          if (v >= 0f) wallProximityPenalty = v; }
+        { float v = env.GetWithDefault("obstacle_collision_penalty", -1f);
+          if (v >= 0f) obstacleCollisionPenalty = v; }
+        { float v = env.GetWithDefault("end_episode_on_obstacle_hit", -1f);
+          if (v >= 0f) endEpisodeOnObstacleHit = v > 0.5f; }
+
+        // ── Terminal rewards ─────────────────────────────────────────────────
+        { float v = env.GetWithDefault("grab_success_reward", -1f);
+          if (v >= 0f) grabSuccessReward = v; }
+        { float v = env.GetWithDefault("timeout_penalty", -1f);
+          if (v >= 0f) timeoutPenalty = v; }
+        { float v = env.GetWithDefault("out_of_arena_penalty", -1f);
+          if (v >= 0f) outOfArenaPenalty = v; }
+
+        // ── Per-step ─────────────────────────────────────────────────────────
+        { float v = env.GetWithDefault("per_step_penalty", -1f);
+          if (v >= 0f) perStepPenalty = v; }
+
+        // ── Phase 2 (slow approach) ──────────────────────────────────────────
+        { float v = env.GetWithDefault("gentle_linear_speed_thresh", -1f);
+          if (v >= 0f) gentleLinearSpeedThresh = v; }
+        { float v = env.GetWithDefault("gentle_angular_speed_thresh", -1f);
+          if (v >= 0f) gentleAngularSpeedThresh = v; }
+        { float v = env.GetWithDefault("gentle_placement_bonus", -1f);
+          if (v >= 0f) gentlePlacementBonus = v; }
+        { float v = env.GetWithDefault("gentle_overspeed_penalty", -1f);
+          if (v >= 0f) gentleOverspeedPenalty = v; }
+
+        // ── Centering streak ─────────────────────────────────────────────────
+        { float v = env.GetWithDefault("centering_bonus_max", -1f);
+          if (v >= 0f) centeringBonusMax = v; }
+        { float v = env.GetWithDefault("centering_streak_cap", -1f);
+          if (v >= 0f) centeringStreakCap = Mathf.Max(1, (int)v); }
+        { float v = env.GetWithDefault("centering_angle_threshold", -1f);
+          if (v >= 0f) centeringAngleThreshold = v; }
+        { float v = env.GetWithDefault("centering_min_movement", -1f);
+          if (v >= 0f) centeringMinMovement = v; }
+
+        // ── Body-camera alignment ────────────────────────────────────────────
+        { float v = env.GetWithDefault("body_camera_alignment_bonus", -1f);
+          if (v >= 0f) bodyCameraAlignmentBonus = v; }
+        { float v = env.GetWithDefault("body_camera_alignment_tolerance_deg", -1f);
+          if (v >= 0f) bodyCameraAlignmentToleranceDeg = v; }
+
+        // ── Blind approach ───────────────────────────────────────────────────
+        { float v = env.GetWithDefault("blind_approach_bonus", -1f);
+          if (v >= 0f) blindApproachBonus = v; }
+        { float v = env.GetWithDefault("blind_approach_min_forward_speed", -1f);
+          if (v >= 0f) blindApproachMinForwardSpeed = v; }
+
+        // ── Backward movement ────────────────────────────────────────────────
+        { float v = env.GetWithDefault("backward_movement_penalty", -1f);
+          if (v >= 0f) backwardMovementPenalty = v; }
+        { float v = env.GetWithDefault("backward_movement_deadzone", -1f);
+          if (v >= 0f) backwardMovementDeadzone = v; }
     }
 
     static bool IsValid(Vector3 v)
