@@ -1815,10 +1815,8 @@ Transform:
   m_GameObject: {fileID: 7286025269670888065}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.02, y: 0.18, z: -0.05}
+  m_LocalPosition: {x: 0.02, y: 0.37, z: 0.28}
   m_LocalScale: {x: 1.5515, y: 1.5515, z: 1.5515}
-  m_LocalPosition: {x: 0.004999697, y: 0.43099785, z: 0.3529993}
-  m_LocalScale: {x: 1.5514998, y: 1.5515, z: 1.5515}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7170547908202784088}
@@ -1853,7 +1851,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6205411498779532645}
-  - {fileID: 2486158007908747428}
+  - {fileID: 4317810706949250565}
   m_Father: {fileID: 4212372868037608869}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &7582556102321972725
@@ -2260,6 +2258,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2613303614116465356}
+    - targetCorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 448925899835208303}
     - targetCorrespondingSourceObject: {fileID: 9127662211880319232, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1081570319156500118}
@@ -2284,37 +2285,6 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 3092803997788386518, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
   m_PrefabInstance: {fileID: 4420174354059537694}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &8865409503205789608
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1710318917514631624}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5d1c4e0b1822b495aa52bc52839ecb30, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.ML-Agents::Unity.MLAgents.Policies.BehaviorParameters
-  m_BrainParameters:
-    VectorObservationSize: 15
-    NumStackedVectorObservations: 1
-    m_ActionSpec:
-      m_NumContinuousActions: 3
-      BranchSizes: 
-    VectorActionSize: 03000000
-    VectorActionDescriptions: []
-    VectorActionSpaceType: 1
-    hasUpgradedBrainParametersWithActionSpec: 1
-  m_Model: {fileID: 0}
-  m_InferenceDevice: 0
-  m_BehaviorType: 0
-  m_BehaviorName: GFSX_Brain
-  TeamId: 0
-  m_UseChildSensors: 1
-  m_UseChildActuators: 1
-  m_DeterministicInference: 0
-  m_ObservableAttributeHandling: 0
 --- !u!114 &5783289150067302827
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2365,37 +2335,6 @@ MonoBehaviour:
   rightIR: 0
   gripperIR: 0
   gripperIRHitObject: {fileID: 0}
---- !u!114 &448925899835208303
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1710318917514631624}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5d1c4e0b1822b495aa52bc52839ecb30, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.ML-Agents::Unity.MLAgents.Policies.BehaviorParameters
-  m_BrainParameters:
-    VectorObservationSize: 16
-    NumStackedVectorObservations: 4
-    m_ActionSpec:
-      m_NumContinuousActions: 2
-      BranchSizes: 
-    VectorActionSize: 02000000
-    VectorActionDescriptions: []
-    VectorActionSpaceType: 1
-    hasUpgradedBrainParametersWithActionSpec: 1
-  m_Model: {fileID: 0}
-  m_InferenceDevice: 0
-  m_BehaviorType: 0
-  m_BehaviorName: GFSX_Brain
-  TeamId: 0
-  m_UseChildSensors: 1
-  m_UseChildActuators: 1
-  m_DeterministicInference: 0
-  m_ObservableAttributeHandling: 0
 --- !u!114 &848217477165904138
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2644,6 +2583,37 @@ MonoBehaviour:
   tiltDeadband: 0.03
   holdLastKnownSeconds: 0.3
   searchPauseAtExtremes: 0
+--- !u!114 &448925899835208303
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1710318917514631624}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d1c4e0b1822b495aa52bc52839ecb30, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.ML-Agents::Unity.MLAgents.Policies.BehaviorParameters
+  m_BrainParameters:
+    VectorObservationSize: 16
+    NumStackedVectorObservations: 4
+    m_ActionSpec:
+      m_NumContinuousActions: 2
+      BranchSizes: 
+    VectorActionSize: 02000000
+    VectorActionDescriptions: []
+    VectorActionSpaceType: 1
+    hasUpgradedBrainParametersWithActionSpec: 1
+  m_Model: {fileID: 0}
+  m_InferenceDevice: 0
+  m_BehaviorType: 0
+  m_BehaviorName: GFSX_Brain
+  TeamId: 0
+  m_UseChildSensors: 1
+  m_UseChildActuators: 1
+  m_DeterministicInference: 0
+  m_ObservableAttributeHandling: 0
 --- !u!1 &3368425570599177975 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1434554889793086441, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}

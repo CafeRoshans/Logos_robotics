@@ -349,13 +349,14 @@ public class RobotBrain : Agent
 
     // --- Welford online std между эпизодами (сбрасывается в Initialize, не OnEpisodeBegin) ---
     // Для каждого компонента хранятся mean и M2; std = sqrt(M2 / (n-1))
+    // Камера сюда не входит: она автономна (CameraAimController), не RL-action, и
+    // соответствующих полей cameraRatePenalty/_rewardCamRate в проекте больше нет.
     private int   _wN    = 0;
     private float _wM_dist,  _wM2_dist;
     private float _wM_wall,  _wM2_wall;
     private float _wM_obs,   _wM2_obs;
     private float _wM_ctr,   _wM2_ctr;
     private float _wM_drv,   _wM2_drv;
-    private float _wM_cam,   _wM2_cam;
     private float _wM_step,  _wM2_step;
     private float _wM_term,  _wM2_term;
     private int   _dropoutBurstsCount = 0; // сколько burst dropout произошло за эпизод
@@ -455,7 +456,6 @@ public class RobotBrain : Agent
         _wM_obs  = _wM2_obs  = 0f;
         _wM_ctr  = _wM2_ctr  = 0f;
         _wM_drv  = _wM2_drv  = 0f;
-        _wM_cam  = _wM2_cam  = 0f;
         _wM_step = _wM2_step = 0f;
         _wM_term = _wM2_term = 0f;
     }
@@ -1151,7 +1151,6 @@ public class RobotBrain : Agent
         WelfordUpdate(_rewardObstacle,  ref _wM_obs,  ref _wM2_obs,  _wN);
         WelfordUpdate(_rewardCenter,    ref _wM_ctr,  ref _wM2_ctr,  _wN);
         WelfordUpdate(_rewardDriveRate, ref _wM_drv,  ref _wM2_drv,  _wN);
-        WelfordUpdate(_rewardCamRate,   ref _wM_cam,  ref _wM2_cam,  _wN);
         WelfordUpdate(_rewardStep,      ref _wM_step, ref _wM2_step, _wN);
         WelfordUpdate(_rewardTerminal,  ref _wM_term, ref _wM2_term, _wN);
         if (_wN >= 2)
@@ -1161,7 +1160,6 @@ public class RobotBrain : Agent
             s.Add("Custom/Std/Obstacle",  WelfordStd(_wM2_obs,  _wN));
             s.Add("Custom/Std/Center",    WelfordStd(_wM2_ctr,  _wN));
             s.Add("Custom/Std/DriveRate", WelfordStd(_wM2_drv,  _wN));
-            s.Add("Custom/Std/CamRate",   WelfordStd(_wM2_cam,  _wN));
             s.Add("Custom/Std/Step",      WelfordStd(_wM2_step, _wN));
             s.Add("Custom/Std/Terminal",  WelfordStd(_wM2_term, _wN));
         }
@@ -1302,8 +1300,8 @@ public class RobotBrain : Agent
         // ── Action rate penalties ────────────────────────────────────────────
         { float v = env.GetWithDefault("drive_rate_penalty", -1f);
           if (v >= 0f) driveRatePenalty = v; }
-        { float v = env.GetWithDefault("camera_rate_penalty", -1f);
-          if (v >= 0f) cameraRatePenalty = v; }
+        // camera_rate_penalty убран из yaml-оверрайдов — поля cameraRatePenalty больше
+        // не существует, камера автономна (CameraAimController), не RL-action.
 
         // ── Wall / obstacle ──────────────────────────────────────────────────
         { float v = env.GetWithDefault("wall_proximity_penalty", -1f);
