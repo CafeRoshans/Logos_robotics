@@ -32,10 +32,10 @@ behaviors:
 environment_parameters:
 
   # ============================================================
-  # CURRICULUM: параметры с пошаговым усложнением
-  # Этап 1 (easy):    мяч рядом, нет препятствий, нет шума
-  # Этап 2 (medium):  3 точки мяча, 1 препятствие, лёгкий шум
-  # Этап 3 (full):    все точки, 2 препятствия, полный шум
+  # CURRICULUM: parameters with staged difficulty progression
+  # Stage 1 (easy):    ball nearby, no obstacles, no noise
+  # Stage 2 (medium):  3 ball spawn points, 1 obstacle, light noise
+  # Stage 3 (full):    all spawn points, 2 obstacles, full noise
   # ============================================================
 
   ball_spawn_count:
@@ -153,7 +153,7 @@ environment_parameters:
         value: 5
 
   # ============================================================
-  # РАНДОМИЗАЦИЯ: sampler-параметры (с первого шага)
+  # RANDOMIZATION: sampler parameters (active from step 1)
   # ============================================================
 
   ball_scale:
@@ -169,17 +169,18 @@ environment_parameters:
       max_value: 0.2
 
   # ============================================================
-  # ОБСТАНОВКА: не награда, но и не curriculum-этап — respawn препятствий
+  # ENVIRONMENT: not a reward, not a curriculum stage either - obstacle respawn
   # ============================================================
 
   obstacle_respawn_every: 1
 
   # ============================================================
-  # НАГРАДЫ И ШТРАФЫ ЗДЕСЬ БЫЛИ И БОЛЬШЕ НЕ ЧИТАЮТСЯ — по прямому запросу (2026-07-22):
-  # куррикулум должен усложнять ОБСТАНОВКУ (см. блоки выше и sampler'ы мяча), но не должен
-  # иметь возможность незаметно перезаписать тюнинг наград при запуске через mlagents-learn.
-  # RobotBrain.ReadYamlEnvParams() больше не содержит блок чтения distance_reward_*,
-  # *_penalty, *_bonus и т.д. — единственный источник истины для наград теперь ТОЛЬКО
-  # инспектор / ArenaPoint.prefab. Если захочешь вернуть управление наградами из yaml —
-  # смотри git history этого файла и RobotBrain.cs на коммит до 2026-07-22.
+  # REWARDS AND PENALTIES USED TO BE HERE AND ARE NO LONGER READ - by explicit
+  # request (2026-07-22): curriculum should scale up the ENVIRONMENT (see blocks
+  # above and the ball samplers), but must not be able to silently overwrite
+  # reward tuning when running via mlagents-learn. RobotBrain.ReadYamlEnvParams()
+  # no longer contains the block that read distance_reward_*, *_penalty, *_bonus,
+  # etc. - the single source of truth for rewards now is ONLY the Inspector /
+  # ArenaPoint.prefab. If you ever want reward control back from yaml, check the
+  # git history of this file and RobotBrain.cs at the commit before 2026-07-22.
   # ============================================================
