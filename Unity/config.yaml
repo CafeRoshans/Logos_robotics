@@ -31,6 +31,131 @@ behaviors:
 
 environment_parameters:
 
+  # ============================================================
+  # CURRICULUM: параметры с пошаговым усложнением
+  # Этап 1 (easy):    мяч рядом, нет препятствий, нет шума
+  # Этап 2 (medium):  3 точки мяча, 1 препятствие, лёгкий шум
+  # Этап 3 (full):    все точки, 2 препятствия, полный шум
+  # ============================================================
+
+  ball_spawn_count:
+    curriculum:
+      - name: easy
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 1
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 3
+      - name: full
+        value: -1
+
+  obstacle_count:
+    curriculum:
+      - name: easy
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 1
+      - name: full
+        value: 2
+
+  vision_noise:
+    curriculum:
+      - name: easy
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0.0
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 0.02
+      - name: full
+        value: 0.04
+
+  ultrasonic_noise:
+    curriculum:
+      - name: easy
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0.0
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 0.03
+      - name: full
+        value: 0.06
+
+  sensor_latency:
+    curriculum:
+      - name: easy
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 2
+      - name: full
+        value: 3
+
+  action_latency:
+    curriculum:
+      - name: easy
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 2
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 4
+      - name: full
+        value: 5
+
+  # ============================================================
+  # РАНДОМИЗАЦИЯ: sampler-параметры (с первого шага)
+  # ============================================================
+
   ball_scale:
     sampler_type: uniform
     sampler_parameters:
@@ -43,46 +168,14 @@ environment_parameters:
       min_value: 0.05
       max_value: 0.2
 
-  vision_noise:
-    sampler_type: uniform
-    sampler_parameters:
-      min_value: 0.02
-      max_value: 0.06
+  # ============================================================
+  # КОНСТАНТЫ: награды и штрафы (не меняются по curriculum)
+  # ============================================================
 
-  ultrasonic_noise:
-    sampler_type: uniform
-    sampler_parameters:
-      min_value: 0.03
-      max_value: 0.08
-
-  sensor_latency:
-    sampler_type: uniform
-    sampler_parameters:
-      min_value: 1
-      max_value: 5
-
-  action_latency:
-    sampler_type: uniform
-    sampler_parameters:
-      min_value: 8
-      max_value: 13
-
-  obstacle_count:
-    sampler_type: constant
-    sampler_parameters:
-      value: 2
-
-  # Сколько первых точек из ballSpawnPoints использовать (curriculum).
-  ball_spawn_count:
-    sampler_type: constant
-    sampler_parameters:
-      value: 2
-
-  # Как часто перекладывать препятствия
   obstacle_respawn_every:
     sampler_type: constant
     sampler_parameters:
-      value: 5
+      value: 1
 
   distance_reward_scale:
     sampler_type: constant
@@ -122,7 +215,7 @@ environment_parameters:
   end_episode_on_obstacle_hit:
     sampler_type: constant
     sampler_parameters:
-      value: 0       # 0 = false, 1 = true
+      value: 0
 
   grab_success_reward:
     sampler_type: constant

@@ -4,10 +4,6 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Кинематический контроллер гусеничного робота с дифференциальным приводом.
 /// Управление: 2 параметра скорости гусениц [-1..1] (leftInput/rightInput) —
-/// именно этот интерфейс ожидает нейронка / ML-Agents brain.
-/// Повороты считаются точной кинематической формулой на основе реального
-/// расстояния между гусеницами (trackWidth), а не подобранной вручную константой.
-/// Силы на Rigidbody НЕ прикладываются — движение целиком через MovePosition/MoveRotation.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class Controller : MonoBehaviour
@@ -75,6 +71,7 @@ public class Controller : MonoBehaviour
         }
 
         trackWidth = Vector3.Distance(leftTrackPoint.localPosition, rightTrackPoint.localPosition);
+        Debug.Log($"Controller: trackWidth = {trackWidth:F3} m (расстояние между точками гусениц).");
         if (trackWidth < 0.01f)
             Debug.LogWarning("Controller: trackWidth почти 0 — проверь позиции leftTrackPoint/rightTrackPoint, повороты будут неадекватными.");
     }
@@ -88,7 +85,6 @@ public class Controller : MonoBehaviour
     /// <summary>
     /// Основной интерфейс для нейронки: газ (вперёд/назад) + руль (влево/вправо).
     /// Внутри раскладывается в leftInput/rightInput по формуле дифференциального привода.
-    /// Совместимо с ROS /cmd_vel (Twist) — linear.x = gas, angular.z = steering.
     /// </summary>
     public void Move(float gas, float steering)
     {
@@ -98,7 +94,6 @@ public class Controller : MonoBehaviour
         float left  = gas + steering * turnK;
         float right = gas - steering * turnK;
 
-        // clamp итоговых значений — сумма gas + steering×turnK может выйти за ±1
         SetTrackInputs(left, right);
     }
 

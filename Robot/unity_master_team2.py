@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 import sys
+import os
 import rospy
 import time
 import traceback
 import atexit
+from datetime import datetime
 from geometry_msgs.msg import Twist, Vector3, Quaternion
 from std_msgs.msg import Int32, Float32
 
-# Добавляем путь к библиотекам XiaoR Geek
 sys.path.append('/root/XiaoRGeek')
 
 print("--- Инициализация XiaoR драйверов ---")
@@ -35,7 +36,6 @@ except Exception as e:
 HAS_SERVO = False
 try:
     if HAS_SENSORS:
-        # Ультразвук уже глобально инициализировал серво в собственном драйвере!
         import xr_ultrasonic
         servo = xr_ultrasonic.servo
         HAS_SERVO = True
@@ -49,18 +49,53 @@ except Exception as e:
     print("❌ ОШИБКА загрузки xr_servo:")
     print(traceback.format_exc())
 
+import config as cfg
 
 # ==========================================
-# КОНФИГУРАЦИЯ И ЛОГИКА МОТОРОВ
+# CSV-ЛОГИРОВАНИЕ
 # ==========================================
-L = 0.15  
-MAX_SPEED_M_S = 0.5 
-PWM_CONVERSION_FACTOR = 100.0 / MAX_SPEED_M_S
-MIN_MOTOR_PWM = 35
+LOG_DIR = "/tmp/unity_logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+_log_filename = os.path.join(LOG_DIR, f"master_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+_csv_file = None
+_log_t0 = time.time()
 
-# --- SOFT-START: Защита от пускового тока и Back-EMF ---
-# Максимальное изменение PWM за 1 тик. При 50Hz: разгон 0→100% за ~0.14 сек.
-MAX_PWM_STEP = 15
+_CSV_HEADER = (
+    "t,event,"
+    "cmd_lin_x,cmd_ang_z,ang_z_ema,"
+    "v_left,v_right,pwm_l,pwm_r,pwm_l_after_ramp,pwm_r_after_ramp,"
+    "uz_raw,uz_filt,ir_l_raw,ir_r_raw,ir_g_raw,ir_l,ir_r,ir_g,"
+    "cam_angle,gripper_cmd"
+)
+
+def _init_log():
+    global _csv_file
+    _csv_file = open(_log_filename, "w")
+    _csv_file.write(_CSV_HEADER + "\n")
+    print(f"📝 CSV log: {_log_filename}")
+
+def _log(event, **kw):
+    if _csv_file is None:
+        return
+    t = time.time() - _log_t0
+    row = [
+        f"{t:.3f}", event,
+        kw.get("lin_x", ""), kw.get("ang_z_raw", ""), kw.get("ang_z_ema", ""),
+        kw.get("v_left", ""), kw.get("v_right", ""),
+        kw.get("pwm_l", ""), kw.get("pwm_r", ""),
+        kw.get("pwm_l_ramp", ""), kw.get("pwm_r_ramp", ""),
+        kw.get("uz_raw", ""), kw.get("uz_filt", ""),
+        kw.get("ir_l_raw", ""), kw.get("ir_r_raw", ""), kw.get("ir_g_raw", ""),
+        kw.get("ir_l", ""), kw.get("ir_r", ""), kw.get("ir_g", ""),
+        kw.get("cam_angle", ""), kw.get("gripper_cmd", ""),
+    ]
+    _csv_file.write(",".join(str(v) for v in row) + "\n")
+    _csv_file.flush()
+
+
+# ==========================================
+# ЛОГИКА МОТОРОВ
+# ==========================================
 prev_pwm_left = 0.0
 prev_pwm_right = 0.0
 pwm_pub = None
@@ -72,13 +107,12 @@ def clamp_pwm(val):
 def set_motors_pwm(pwm_left, pwm_right):
     global prev_pwm_left, prev_pwm_right, pwm_pub
     if not HAS_GPIO: return
-    
-    # Левый мотор физически инвертирован (подтверждено тестом с клавиатуры 05.06.2026):
-    # Без инверсии W(gas=+1) → робот поворачивает вместо езды вперёд.
-    pwm_left = -pwm_left
 
-    # v18 FIX: HARD STOP — если оба таргета нулевые, стопим мгновенно без рампы.
-    # Без этого рампа давала 3-4 тика остаточного PWM, а MIN_MOTOR_PWM бустил его до 35.
+    if cfg.MOTOR_INVERT_LEFT:
+        pwm_left = -pwm_left
+    if cfg.MOTOR_INVERT_RIGHT:
+        pwm_right = -pwm_right
+
     if abs(pwm_left) < 0.5 and abs(pwm_right) < 0.5:
         prev_pwm_left = 0.0
         prev_pwm_right = 0.0
@@ -94,32 +128,30 @@ def set_motors_pwm(pwm_left, pwm_right):
             except:
                 pass
         return
-    
-    # --- SOFT-START: Ограничиваем скорость нарастания ---
+
     delta_l = pwm_left - prev_pwm_left
-    if abs(delta_l) > MAX_PWM_STEP:
-        pwm_left = prev_pwm_left + (MAX_PWM_STEP if delta_l > 0 else -MAX_PWM_STEP)
-    
+    if abs(delta_l) > cfg.MAX_PWM_STEP:
+        pwm_left = prev_pwm_left + (cfg.MAX_PWM_STEP if delta_l > 0 else -cfg.MAX_PWM_STEP)
+
     delta_r = pwm_right - prev_pwm_right
-    if abs(delta_r) > MAX_PWM_STEP:
-        pwm_right = prev_pwm_right + (MAX_PWM_STEP if delta_r > 0 else -MAX_PWM_STEP)
-    
+    if abs(delta_r) > cfg.MAX_PWM_STEP:
+        pwm_right = prev_pwm_right + (cfg.MAX_PWM_STEP if delta_r > 0 else -cfg.MAX_PWM_STEP)
+
     prev_pwm_left = pwm_left
     prev_pwm_right = pwm_right
-    
+
     abs_l = abs(pwm_left)
-    # FIX: Если PWM ниже мёртвой зоны мотора — СТОП, а не буст до 35.
-    # Без этого при steering>0.3 один мотор получал PWM=-2 → бустился до -35 → робот крутился.
-    MOTOR_DEAD_ZONE = 10  # PWM ниже 10% — мотор всё равно не крутится, ставим 0
-    if abs_l < MOTOR_DEAD_ZONE:
+    if abs_l < cfg.MOTOR_DEAD_ZONE:
         abs_l = 0
-    elif abs_l < MIN_MOTOR_PWM:
-        abs_l = MIN_MOTOR_PWM
+    elif abs_l < cfg.MIN_MOTOR_PWM:
+        abs_l = cfg.MIN_MOTOR_PWM
+
     abs_r = abs(pwm_right)
-    if abs_r < MOTOR_DEAD_ZONE:
+    if abs_r < cfg.MOTOR_DEAD_ZONE:
         abs_r = 0
-    elif abs_r < MIN_MOTOR_PWM:
-        abs_r = MIN_MOTOR_PWM
+    elif abs_r < cfg.MIN_MOTOR_PWM:
+        abs_r = cfg.MIN_MOTOR_PWM
+    abs_r = min(int(abs_r * cfg.RIGHT_MOTOR_BOOST), 100)
 
     if int(abs_l) == 0 and int(abs_r) == 0:
         gpio.digital_write(gpio.IN1, 0)
@@ -160,184 +192,162 @@ def set_motors_pwm(pwm_left, pwm_right):
 
     if pwm_pub is not None:
         try:
-            # Восстанавливаем логический знак левого мотора (так как он был инвертирован в начале функции)
-            logical_left = -pwm_left if abs_l > 0 else 0.0
-            logical_right = pwm_right if abs_r > 0 else 0.0
+            logical_left = -pwm_left
+            logical_right = -pwm_right
             pwm_pub.publish(Vector3(float(logical_left), float(logical_right), 0.0))
         except:
             pass
 
-SAFETY_STOP_CM = 50  # Локальный стоп если УЗ < 50см и робот едет ВПЕРЁД
 
 def vel_callback(data):
     global filtered_cm, last_cmd_vel_time, prev_ang_z
     last_cmd_vel_time = time.time()
-    
-    # Дифференциальный привод: v = linear ± angular * TURN_K
-    # v27: Снижен TURN_K до 0.25 для плавности поворота, MAX_LINEAR = 0.25 (без изменений)
-    TURN_K = 0.25
-    MAX_LINEAR = 0.25  # Ограничение: модель даёт gas=1.0, но робот едет max 50%
 
-    lin_x = max(min(data.linear.x, MAX_LINEAR), -MAX_LINEAR)
-    
-    # EMA сглаживание для угловой скорости (steering)
-    EMA_STEER = 0.40
-    ang_z = EMA_STEER * data.angular.z + (1.0 - EMA_STEER) * prev_ang_z
+    lin_x = max(min(data.linear.x, cfg.MAX_LINEAR), -cfg.MAX_LINEAR)
+
+    ang_z = cfg.EMA_STEER * data.angular.z + (1.0 - cfg.EMA_STEER) * prev_ang_z
     prev_ang_z = ang_z
 
-    v_left  = lin_x + (ang_z * TURN_K)
-    v_right = lin_x - (ang_z * TURN_K)
-    pwm_left = clamp_pwm(v_left * PWM_CONVERSION_FACTOR)
-    pwm_right = clamp_pwm(v_right * PWM_CONVERSION_FACTOR)
-    
+    v_left  = lin_x + (ang_z * cfg.TURN_K)
+    v_right = lin_x - (ang_z * cfg.TURN_K)
+    pwm_left = clamp_pwm(v_left * cfg.PWM_CONVERSION_FACTOR)
+    pwm_right = clamp_pwm(v_right * cfg.PWM_CONVERSION_FACTOR)
+
     set_motors_pwm(pwm_left, pwm_right)
 
-# --- WATCHDOG: Если Unity отключился, стопим моторы ---
+    _log("cmd_vel",
+         lin_x=f"{lin_x:.3f}", ang_z_raw=f"{data.angular.z:.3f}", ang_z_ema=f"{ang_z:.3f}",
+         v_left=f"{v_left:.3f}", v_right=f"{v_right:.3f}",
+         pwm_l=f"{pwm_left:.1f}", pwm_r=f"{pwm_right:.1f}",
+         pwm_l_ramp=f"{prev_pwm_left:.1f}", pwm_r_ramp=f"{prev_pwm_right:.1f}")
+
 last_cmd_vel_time = time.time()
-WATCHDOG_TIMEOUT = 0.5  # секунд без команды → СТОП
 
 def watchdog_callback(event):
     global prev_pwm_left, prev_pwm_right
-    if time.time() - last_cmd_vel_time > WATCHDOG_TIMEOUT:
+    if time.time() - last_cmd_vel_time > cfg.WATCHDOG_TIMEOUT:
         if abs(prev_pwm_left) > 0 or abs(prev_pwm_right) > 0:
-            print("⚠️ WATCHDOG: Нет /cmd_vel %.1f сек! АВАРИЙНАЯ ОСТАНОВКА!" % WATCHDOG_TIMEOUT)
+            print("⚠️ WATCHDOG: Нет /cmd_vel %.1f сек! АВАРИЙНАЯ ОСТАНОВКА!" % cfg.WATCHDOG_TIMEOUT)
+            _log("watchdog", pwm_l_ramp=f"{prev_pwm_left:.1f}", pwm_r_ramp=f"{prev_pwm_right:.1f}")
             set_motors_pwm(0, 0)
             prev_pwm_left = 0.0
             prev_pwm_right = 0.0
 
 
 # ==========================================
-# КОНФИГУРАЦИЯ И ЛОГИКА СЕРВОМОТОРОВ
+# ЛОГИКА СЕРВОМОТОРОВ
 # ==========================================
-SERVO_BASE = 1      
-SERVO_SHOULDER = 2  
-SERVO_ELBOW = 3     
-SERVO_CLAW = 4      
-SERVO_CAMERA_PAN = 7
-
-ANGLE_BASE_CENTER = 90
-ANGLE_SHOULDER_UP = 90
-ANGLE_ELBOW_UP = 90
-ANGLE_SHOULDER_DOWN = 20
-ANGLE_ELBOW_DOWN = 130
-ANGLE_CLAW_OPEN = 50    
-ANGLE_CLAW_CLOSE = 89   
-
 def init_arm():
     if not HAS_SERVO: return
     print("Инициализация начальной позы манипулятора и камеры...")
-    servo.set(SERVO_BASE, ANGLE_BASE_CENTER)
+    servo.set(cfg.SERVO_BASE, cfg.ANGLE_BASE_CENTER)
     time.sleep(0.3)
-    servo.set(SERVO_SHOULDER, ANGLE_SHOULDER_UP)
+    servo.set(cfg.SERVO_SHOULDER, cfg.ANGLE_SHOULDER_UP)
     time.sleep(0.3)
-    servo.set(SERVO_ELBOW, ANGLE_ELBOW_UP)
+    servo.set(cfg.SERVO_ELBOW, cfg.ANGLE_ELBOW_UP)
     time.sleep(0.3)
-    servo.set(SERVO_CLAW, ANGLE_CLAW_OPEN) 
+    servo.set(cfg.SERVO_CLAW, cfg.ANGLE_CLAW_OPEN)
     time.sleep(0.3)
-    servo.set(SERVO_CAMERA_PAN, 90)
+    servo.set(cfg.SERVO_CAMERA_LOW, 90)
     print("Рука поднята, камера отцентрирована. Робот готов!")
 
 def gripper_callback(data):
     cmd = data.data
+    _log("gripper", gripper_cmd=cmd)
     if not HAS_SERVO: return
     if cmd == 1:
-        # Prepare to grab: опускаем руку и открываем клешню
-        servo.set(SERVO_SHOULDER, ANGLE_SHOULDER_DOWN)
-        time.sleep(0.2)
-        servo.set(SERVO_ELBOW, ANGLE_ELBOW_DOWN)
-        time.sleep(0.2)
-        servo.set(SERVO_CLAW, ANGLE_CLAW_OPEN)
+        servo.set(cfg.SERVO_BASE, cfg.ANGLE_BASE_CENTER)
+        time.sleep(0.1)
+        servo.set(cfg.SERVO_SHOULDER, cfg.ANGLE_SHOULDER_DOWN)
+        time.sleep(0.1)
+        servo.set(cfg.SERVO_ELBOW, cfg.ANGLE_ELBOW_DOWN)
+        time.sleep(0.1)
+        servo.set(cfg.SERVO_CLAW, cfg.ANGLE_CLAW_OPEN)
     elif cmd == 2:
-        # Grab: закрываем клешню и поднимаем руку
-        servo.set(SERVO_CLAW, ANGLE_CLAW_CLOSE)
-        time.sleep(0.5)
-        servo.set(SERVO_ELBOW, ANGLE_ELBOW_UP)
-        time.sleep(0.2)
-        servo.set(SERVO_SHOULDER, ANGLE_SHOULDER_UP)
+        servo.set(cfg.SERVO_BASE, cfg.ANGLE_BASE_CENTER)
+        time.sleep(0.1)
+        servo.set(cfg.SERVO_CLAW, cfg.ANGLE_CLAW_CLOSE)
+        time.sleep(0.1)
+        servo.set(cfg.SERVO_ELBOW, cfg.ANGLE_ELBOW_UP)
+        time.sleep(0.1)
+        servo.set(cfg.SERVO_SHOULDER, cfg.ANGLE_SHOULDER_UP)
     elif cmd == 3:
-        # Init: стартовая поза
         init_arm()
     elif cmd == 4:
-        # Release only: только открыть клешню, рука остаётся поднятой
-        # Используется unity_gripper_ir.py после захвата: рука уже поднята, просто разжимаем
-        servo.set(SERVO_CLAW, ANGLE_CLAW_OPEN)
-        print(f"[GripperCB] cmd=4: клешня открыта ({ANGLE_CLAW_OPEN}°), рука не двигается")
+        servo.set(cfg.SERVO_CLAW, cfg.ANGLE_CLAW_OPEN)
+        print(f"[GripperCB] cmd=4: клешня открыта ({cfg.ANGLE_CLAW_OPEN}°), рука не двигается")
 
-# --- Плавное слежение камеры ---
-current_camera_angle = 90  # Текущий угол серво
-MAX_CAMERA_STEP = 15       # Макс градусов за один тик (плавное движение)
+current_camera_angle = 90
 
 def camera_callback(data):
     global current_camera_angle
     if not HAS_SERVO: return
     yaw = data.data
-    # ИНВЕРСИЯ: Если в Unity камера в одну сторону, а в реальности в другую — меняем знак здесь
     target = 90 - (yaw * 90)
     target = max(0, min(180, target))
-    
-    # Плавное движение: не больше MAX_CAMERA_STEP градусов за шаг
+
     diff = target - current_camera_angle
-    if abs(diff) > MAX_CAMERA_STEP:
-        diff = MAX_CAMERA_STEP if diff > 0 else -MAX_CAMERA_STEP
-    
+    if abs(diff) > cfg.MAX_CAMERA_STEP:
+        diff = cfg.MAX_CAMERA_STEP if diff > 0 else -cfg.MAX_CAMERA_STEP
+
     current_camera_angle += diff
     current_camera_angle = max(0, min(180, current_camera_angle))
-    servo.set(SERVO_CAMERA_PAN, int(current_camera_angle))
+    servo.set(cfg.SERVO_CAMERA_PAN, int(current_camera_angle))
+    _log("camera", cam_angle=f"{current_camera_angle:.0f}")
+
 
 # ==========================================
-# ЧТЕНИЕ СЕНСОРОВ В ТАЙМЕРЕ
+# ЧТЕНИЕ СЕНСОРОВ
 # ==========================================
-# --- Фильтрация датчиков ---
 us_history = [100.0, 100.0, 100.0]
-filtered_cm = 500.0 
+filtered_cm = 500.0
 ir_l_history = [0, 0, 0, 0, 0]
 ir_r_history = [0, 0, 0, 0, 0]
-ir_gripper_history = [0, 0, 0, 0, 0]  # ИК датчик клешни (gpio.IR_M, pin 22)
+ir_gripper_history = [0, 0, 0, 0, 0]
 
 def sensor_timer_callback(event):
     global us_history, ir_l_history, ir_r_history, ir_gripper_history, filtered_cm
     if not HAS_SENSORS or sensor_pub is None: return
     try:
         msg = Quaternion()
-        # 1. Ультразвук с медианным фильтром (окно 3)
         dist_cm = us.get_distance()
-        if dist_cm <= 0 or dist_cm > 500: dist_cm = 500.0
-        
+        if dist_cm <= 0 or dist_cm > 500.0: dist_cm = 500.0
+
         us_history.pop(0)
         us_history.append(dist_cm)
-        
-        # Медиана убирает одиночные "вылеты" (0 или 500)
+
         sorted_us = sorted(us_history)
         filtered_cm = sorted_us[1]
         msg.x = filtered_cm / 100.0
-        
-        # 2. ИК сенсоры (ИНВЕРСИЯ: Свапнуты L/R для верного отображения)
-        ir_l = 1 if gpio.digital_read(gpio.IRF_R) == 0 else 0
-        ir_r = 1 if gpio.digital_read(gpio.IRF_L) == 0 else 0
-        
+
+        ir_l = 1 if gpio.digital_read(cfg.PIN_IR_LEFT) == 0 else 0
+        ir_r = 1 if gpio.digital_read(cfg.PIN_IR_RIGHT) == 0 else 0
+
         ir_l_history.pop(0)
         ir_l_history.append(ir_l)
         ir_r_history.pop(0)
         ir_r_history.append(ir_r)
-        
-        # Только если последние 2 из 3 значений == 1, считаем препятствие (фильтр дребезга)
+
         msg.y = float(1 if sum(ir_l_history[-3:]) >= 2 else 0)
         msg.z = float(1 if sum(ir_r_history[-3:]) >= 2 else 0)
-        
-        # 3. ИК датчик клешни (gpio.IR_M, pin 22)
-        # ИСПРАВЛЕНО: ранее msg.w = 0.0 (хардкод), из-за чего автозахват на реальном
-        # роботе никогда не срабатывал. Теперь читаем реальный пин.
-        ir_gripper = 1 if gpio.digital_read(gpio.IR_M) == 0 else 0
+
+        ir_gripper = 1 if gpio.digital_read(cfg.PIN_IR_GRIPPER) == 0 else 0
         ir_gripper_history.pop(0)
         ir_gripper_history.append(ir_gripper)
         msg.w = float(1 if sum(ir_gripper_history[-3:]) >= 2 else 0)
-        
+
         sensor_pub.publish(msg)
-        
+
+        _log("sensor",
+             uz_raw=f"{dist_cm:.1f}", uz_filt=f"{filtered_cm:.1f}",
+             ir_l_raw=ir_l, ir_r_raw=ir_r, ir_g_raw=ir_gripper,
+             ir_l=int(msg.y), ir_r=int(msg.z), ir_g=int(msg.w))
+
         if msg.w == 1.0:
             print(f"🎯 ИК КЛЕШНЯ: мяч обнаружен! (UZ={filtered_cm:.1f}cm, IR_L={int(msg.y)}, IR_R={int(msg.z)})")
     except Exception as e:
         print(f"❌ ОШИБКА В ТАЙМЕРЕ СЕНСОРОВ: {e}")
+
 
 # ==========================================
 # ГЛАВНЫЙ БЛОК ROS
@@ -345,27 +355,32 @@ def sensor_timer_callback(event):
 def listener():
     global sensor_pub, pwm_pub
     rospy.init_node('unity_robot_master', anonymous=True)
-    
+    _init_log()
+
     rospy.Subscriber('/cmd_vel', Twist, vel_callback)
-    
+
     if HAS_SERVO:
         rospy.Subscriber('/cmd_gripper', Int32, gripper_callback)
         rospy.Subscriber('/cmd_camera_pan', Float32, camera_callback)
-        init_arm() 
-        
+        init_arm()
+
     if HAS_SENSORS:
         sensor_pub = rospy.Publisher('/sensor/data', Quaternion, queue_size=10)
-        rospy.Timer(rospy.Duration(0.1), sensor_timer_callback) 
-        
+        rospy.Timer(rospy.Duration(0.1), sensor_timer_callback)
+
     pwm_pub = rospy.Publisher('/sensor/pwm', Vector3, queue_size=10)
 
-    # Watchdog: каждые 0.2 сек проверяем, жив ли /cmd_vel
     rospy.Timer(rospy.Duration(0.2), watchdog_callback)
 
     rospy.spin()
 
-# --- АВАРИЙНАЯ ОСТАНОВКА МОТОРОВ ПРИ ВЫХОДЕ ---
 def emergency_stop():
+    if _csv_file:
+        try:
+            _csv_file.close()
+            print(f"📝 Log saved: {_log_filename}")
+        except:
+            pass
     try:
         if HAS_GPIO:
             gpio.digital_write(gpio.IN1, 0)
