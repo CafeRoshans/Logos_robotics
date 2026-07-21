@@ -1946,11 +1946,14 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   targetBallTag: TargetBall
+  confidenceFalloff: 0.8
+  confidenceJitter: 0.08
   isVisible: 0
   horizontalAngle: 0
   verticalAngle: 0
   normalizedDistance: 1
   rawDistance: -1
+  confidence: 0
   drawGizmos: 1
 --- !u!1 &7286025269670888065
 GameObject:
@@ -2597,10 +2600,10 @@ MonoBehaviour:
   timeoutPenalty: 1
   obstacleTag: Obstacle
   wallTag: Wall
-  obstacleCollisionPenalty: 4
+  obstacleCollisionPenalty: 2
   endEpisodeOnObstacleHit: 0
   endEpisodeOnWallHit: 1
-  grabSuccessReward: 8
+  grabSuccessReward: 6
   blindApproachBonus: 0.003
   blindApproachMinForwardSpeed: 0.05
   ultrasonicNoise: 0.07
@@ -2609,13 +2612,13 @@ MonoBehaviour:
   sensorLatencySteps: 3
   useYamlEnvParams: 1
   hardStopOnHold: 1
-  perStepPenalty: 0.0005
+  perStepPenalty: 0.001
   outOfArenaPenalty: 3.5
   gentleLinearSpeedThresh: 0.08
   gentleAngularSpeedThresh: 0.15
   gentlePlacementBonus: 0.008
   gentleOverspeedPenalty: 0.015
-  backwardMovementPenalty: 0.01
+  backwardMovementPenalty: 0.005
   backwardMovementDeadzone: 0.01
   centeringBonusMax: 0.012
   centeringStreakCap: 30
@@ -2766,6 +2769,7 @@ MonoBehaviour:
   isVisible: 0
   horizontalAngle: 0
   verticalAngle: 0
+  confidence: 0
 --- !u!114 &6364411629071752895
 MonoBehaviour:
   m_ObjectHideFlags: 0

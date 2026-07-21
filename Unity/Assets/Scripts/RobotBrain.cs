@@ -153,8 +153,11 @@ public class RobotBrain : Agent
     public int sensorLatencySteps = 3;
 
     [Header("Yaml environment_parameters")]
-    [Tooltip("Читать ball_mass, ball_scale, ultrasonic_noise, vision_noise, sensor_latency, action_latency из config.yaml " +
-             "→ environment_parameters. Позволяет менять физику без пересборки билда + поддерживает curriculum.")]
+    [Tooltip("Читать ball_mass, ball_scale, vision_noise, ultrasonic_noise, sensor_latency, action_latency, " +
+             "obstacle_count, ball_spawn_count, obstacle_respawn_every из config.yaml → environment_parameters. " +
+             "Позволяет менять физику/обстановку без пересборки билда + поддерживает curriculum (усложнение). " +
+             "НЕ включает награды/штрафы — те по прямому запросу больше НЕ читаются из yaml вообще, только " +
+             "из инспектора/prefab (см. конец ReadYamlEnvParams()).")]
     public bool useYamlEnvParams = true;
 
     [Header("Hard-stop после захвата")]
@@ -1227,9 +1230,11 @@ public class RobotBrain : Agent
     }
 
     /// <summary>
-    /// Читает environment_parameters из config.yaml (Academy) и обновляет соответствующие поля.
+    /// Читает environment_parameters из config.yaml (Academy) и обновляет соответствующие поля —
+    /// ТОЛЬКО физику/обстановку/куррикулум (мяч, шум, латентность, препятствия, точки спавна).
     /// Вызывается в OnEpisodeBegin — параметры могут меняться между эпизодами (curriculum).
     /// Если yaml не задал параметр, оставляем текущее значение из инспектора.
+    /// Награды/штрафы СОЗНАТЕЛЬНО не читаются отсюда — см. комментарий в конце метода.
     /// </summary>
     void ReadYamlEnvParams()
     {
@@ -1289,125 +1294,14 @@ public class RobotBrain : Agent
             if (v >= 0f) obstacleRespawnEveryEpisodes = (int)v;
         }
 
-        // ── Distance reward ──────────────────────────────────────────────────
-        {
-            float v = env.GetWithDefault("distance_reward_scale", -1f);
-            if (v >= 0f) distanceRewardScale = v;
-        }
-        {
-            float v = env.GetWithDefault("distance_reward_alpha", -1f);
-            if (v >= 0f) distanceRewardAlpha = v;
-        }
-        {
-            float v = env.GetWithDefault("close_radius", -1f);
-            if (v >= 0f) closeRadius = v;
-        }
-
-        // ── Action rate penalties ────────────────────────────────────────────
-        { float v = env.GetWithDefault("drive_rate_penalty", -1f);
-          if (v >= 0f) driveRatePenalty = v; }
-        // camera_rate_penalty убран из yaml-оверрайдов — поля cameraRatePenalty больше
-        // не существует, камера автономна (CameraAimController), не RL-action.
-
-        // ── Wall / obstacle ──────────────────────────────────────────────────
-        {
-            float v = env.GetWithDefault("wall_proximity_penalty", -1f);
-            if (v >= 0f) wallProximityPenalty = v;
-        }
-        {
-            float v = env.GetWithDefault("obstacle_collision_penalty", -1f);
-            if (v >= 0f) obstacleCollisionPenalty = v;
-        }
-        {
-            float v = env.GetWithDefault("end_episode_on_obstacle_hit", -1f);
-            if (v >= 0f) endEpisodeOnObstacleHit = v > 0.5f;
-        }
-
-        // ── Terminal rewards ─────────────────────────────────────────────────
-        {
-            float v = env.GetWithDefault("grab_success_reward", -1f);
-            if (v >= 0f) grabSuccessReward = v;
-        }
-        {
-            float v = env.GetWithDefault("timeout_penalty", -1f);
-            if (v >= 0f) timeoutPenalty = v;
-        }
-        {
-            float v = env.GetWithDefault("out_of_arena_penalty", -1f);
-            if (v >= 0f) outOfArenaPenalty = v;
-        }
-
-        // ── Per-step ─────────────────────────────────────────────────────────
-        {
-            float v = env.GetWithDefault("per_step_penalty", -1f);
-            if (v >= 0f) perStepPenalty = v;
-        }
-
-        // ── Phase 2 (slow approach) ──────────────────────────────────────────
-        {
-            float v = env.GetWithDefault("gentle_linear_speed_thresh", -1f);
-            if (v >= 0f) gentleLinearSpeedThresh = v;
-        }
-        {
-            float v = env.GetWithDefault("gentle_angular_speed_thresh", -1f);
-            if (v >= 0f) gentleAngularSpeedThresh = v;
-        }
-        {
-            float v = env.GetWithDefault("gentle_placement_bonus", -1f);
-            if (v >= 0f) gentlePlacementBonus = v;
-        }
-        {
-            float v = env.GetWithDefault("gentle_overspeed_penalty", -1f);
-            if (v >= 0f) gentleOverspeedPenalty = v;
-        }
-
-        // ── Centering streak ─────────────────────────────────────────────────
-        {
-            float v = env.GetWithDefault("centering_bonus_max", -1f);
-            if (v >= 0f) centeringBonusMax = v;
-        }
-        {
-            float v = env.GetWithDefault("centering_streak_cap", -1f);
-            if (v >= 0f) centeringStreakCap = Mathf.Max(1, (int)v);
-        }
-        {
-            float v = env.GetWithDefault("centering_angle_threshold", -1f);
-            if (v >= 0f) centeringAngleThreshold = v;
-        }
-        {
-            float v = env.GetWithDefault("centering_min_movement", -1f);
-            if (v >= 0f) centeringMinMovement = v;
-        }
-
-        // ── Body-camera alignment ────────────────────────────────────────────
-        {
-            float v = env.GetWithDefault("body_camera_alignment_bonus", -1f);
-            if (v >= 0f) bodyCameraAlignmentBonus = v;
-        }
-        {
-            float v = env.GetWithDefault("body_camera_alignment_tolerance_deg", -1f);
-            if (v >= 0f) bodyCameraAlignmentToleranceDeg = v;
-        }
-
-        // ── Blind approach ───────────────────────────────────────────────────
-        {
-            float v = env.GetWithDefault("blind_approach_bonus", -1f);
-            if (v >= 0f) blindApproachBonus = v;
-        }
-        {
-            float v = env.GetWithDefault("blind_approach_min_forward_speed", -1f);
-            if (v >= 0f) blindApproachMinForwardSpeed = v;
-        }
-
-        // ── Backward movement ────────────────────────────────────────────────
-        {
-            float v = env.GetWithDefault("backward_movement_penalty", -1f);
-            if (v >= 0f) backwardMovementPenalty = v;
-        }
-        {
-            float v = env.GetWithDefault("backward_movement_deadzone", -1f);
-            if (v >= 0f) backwardMovementDeadzone = v;
-        }
+        // Награды/штрафы (distance_reward_*, *_penalty, *_bonus и т.д.) СОЗНАТЕЛЬНО НЕ
+        // читаются из yaml — по прямому запросу: куррикулум (усложнение обстановки — шум,
+        // латентность, препятствия, точки спавна выше) должен работать, а тюнинг наград —
+        // только через инспектор/prefab, чтобы его нельзя было незаметно перезаписать при
+        // запуске через mlagents-learn. Раньше тут был блок на ~25 полей, дублирующий ровно
+        // то, что уже задано в ArenaPoint.prefab — соответствующие ключи убраны и из
+        // config.yaml (см. комментарий там). Если понадобится вернуть — это была секция
+        // "КОНСТАНТЫ: награды и штрафы" в config.yaml, git history её помнит.
     }
 
     static bool IsValid(Vector3 v)
