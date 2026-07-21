@@ -30,16 +30,16 @@ import traceback
 
 sys.path.append('/root/XiaoRGeek')
 
-# --- ROS ---
 import rospy
 from std_msgs.msg import Int32
 
-# --- GPIO (только для чтения пина, НЕ инициализируем серво) ---
+import config as cfg
+
 HAS_GPIO = False
 try:
     import xr_gpio as gpio
     HAS_GPIO = True
-    print("✅ [GripperIR] xr_gpio загружен — пин IR_M (22) доступен")
+    print(f"✅ [GripperIR] xr_gpio загружен — пин клешни (pin {cfg.PIN_IR_GRIPPER}) доступен")
 except Exception as e:
     print(f"❌ [GripperIR] Ошибка загрузки xr_gpio: {e}")
     print(traceback.format_exc())
@@ -56,14 +56,9 @@ CMD_GRIPPER_OPEN  = 4  # unity_master.py: только открыть клешн
 # =============================================
 
 def read_ir_m():
-    """
-    Читаем IR_M (pin 22) с pull-up логикой:
-      GPIO == 0  →  объект есть   → возвращаем 1
-      GPIO == 1  →  свободно      → возвращаем 0
-    """
     if not HAS_GPIO:
         return 0
-    return 1 if gpio.digital_read(gpio.IR_M) == 0 else 0
+    return 1 if gpio.digital_read(cfg.PIN_IR_GRIPPER) == 0 else 0
 
 def main():
     rospy.init_node('unity_gripper_ir', anonymous=False)

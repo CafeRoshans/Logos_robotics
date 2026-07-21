@@ -25,6 +25,8 @@ echo "Контейнер готов! Обновление скриптов..."
 echo "Обновление единого мастер-скрипта в контейнере..."
 # Получаем директорию текущего скрипта
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+docker cp "$SCRIPT_DIR/config.py" $CONTAINER_NAME:/root/config.py
+docker cp "$SCRIPT_DIR/xr_gpio.py" $CONTAINER_NAME:/root/XiaoRGeek/xr_gpio.py
 docker cp "$SCRIPT_DIR/unity_master_team2.py" $CONTAINER_NAME:/root/unity_master_team2.py
 docker cp "$SCRIPT_DIR/unity_gripper_ir_team2.py" $CONTAINER_NAME:/root/unity_gripper_ir_team2.py
 

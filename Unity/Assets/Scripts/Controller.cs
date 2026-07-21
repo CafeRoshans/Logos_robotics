@@ -15,6 +15,7 @@ using UnityEngine.InputSystem;
 /// SetTrackInputs(left, right) — низкоуровневый прямой доступ к гусеницам [-1..1] каждая,
 /// используется ручным тестом с клавиатуры и как результат работы Move().
 /// Силы на Rigidbody НЕ прикладываются — движение целиком через MovePosition/MoveRotation.
+/// Управление: 2 параметра скорости гусениц [-1..1] (leftInput/rightInput) —
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class Controller : MonoBehaviour
@@ -74,6 +75,7 @@ public class Controller : MonoBehaviour
         }
 
         trackWidth = Vector3.Distance(leftTrackPoint.localPosition, rightTrackPoint.localPosition);
+        Debug.Log($"Controller: trackWidth = {trackWidth:F3} m (расстояние между точками гусениц).");
         if (trackWidth < 0.01f)
             Debug.LogWarning("Controller: trackWidth почти 0 — проверь позиции leftTrackPoint/rightTrackPoint, повороты будут неадекватными.");
     }
