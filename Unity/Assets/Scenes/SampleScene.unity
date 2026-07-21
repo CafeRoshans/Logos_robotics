@@ -1437,7 +1437,7 @@ PrefabInstance:
       objectReference: {fileID: 5022602860645237092, guid: a0654dfc12ecd0b48943fcbc42bb27ba, type: 3}
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: useRealRobot
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: perStepPenalty
@@ -1450,6 +1450,26 @@ PrefabInstance:
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: obstacleRespawnEveryEpisodes
       value: 1000
+      objectReference: {fileID: 0}
+    - target: {fileID: 1868254975703711658, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: m_Size.y
+      value: 0.007192841
+      objectReference: {fileID: 0}
+    - target: {fileID: 1868254975703711658, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: m_Size.z
+      value: 0.003525068
+      objectReference: {fileID: 0}
+    - target: {fileID: 1868254975703711658, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: m_Center.x
+      value: 0.0009024861
+      objectReference: {fileID: 0}
+    - target: {fileID: 1868254975703711658, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: m_Center.y
+      value: 0.00011191147
+      objectReference: {fileID: 0}
+    - target: {fileID: 1868254975703711658, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: m_Center.z
+      value: 0.0018635243
       objectReference: {fileID: 0}
     - target: {fileID: 3657878881065950151, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: useManualInput
