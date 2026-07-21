@@ -25,8 +25,14 @@ public class SimulatedYoloCamera : MonoBehaviour
              "а камера не видит', когда физический наклон Camera не совпадал с ожиданиями.")]
     public float verticalFovDegrees = 40f;
 
-    [Tooltip("Максимальная дальность детекции мяча (м)")]
-    public float maxRange = 2.0f;
+    [Tooltip("Максимальная дальность детекции мяча (м). БЫЛО багом-по-факту: 2.0 м при арене " +
+             "до ~6.4 м в глубину (arenaHalfSize.z=3.2) — робот физически не мог увидеть мяч " +
+             "почти нигде, кроме как вплотную, хотя реальный YOLO на чётко отличимом жёлтом мяче " +
+             "уверенно детектирует на дистанциях, сопоставимых с размером арены. Дальность — не то, " +
+             "что должно резко обрубаться (это не свойство реального YOLO), а качество/шум детекции — " +
+             "то, что уже симулируется через visionDistanceNoise/visionAngleNoise. Поставлено с " +
+             "запасом больше диагонали арены, чтобы ограничение внутри арены практически не мешало.")]
+    public float maxRange = 8.0f;
 
     [Tooltip("Слои для проверки препятствий (стены и т.п.)")]
     public LayerMask obstacleMask = ~0;
@@ -34,12 +40,24 @@ public class SimulatedYoloCamera : MonoBehaviour
     [Tooltip("Тег мяча — если Raycast упёрся в него, считаем не перекрытым")]
     public string targetBallTag = "TargetBall";
 
+    [Header("Синтетическая confidence (аналог packet.conf с реального YOLO)")]
+    [Tooltip("На каком нормализованном расстоянии (0..1 от maxRange) confidence падает до " +
+             "минимума. 1.0 = падает линейно вплоть до самого maxRange. Меньше = детектор " +
+             "'уверен' только на действительно близких дистанциях.")]
+    [Range(0.1f, 1f)]
+    public float confidenceFalloff = 0.8f;
+    [Tooltip("Случайный джиттер confidence кадр-к-кадру (реальная детекция не идеально стабильна " +
+             "даже на постоянной дистанции — блики, шум сенсора и т.п.)")]
+    [Range(0f, 0.3f)]
+    public float confidenceJitter = 0.08f;
+
     // Выходные показания (читает RobotBrain)
     [HideInInspector] public bool  isVisible = false;
     [HideInInspector] public float horizontalAngle = 0f;    // -1..1  (лево..право относительно центра кадра)
     [HideInInspector] public float verticalAngle   = 0f;    // -1..1  (верх..низ относительно центра кадра)
     [HideInInspector] public float normalizedDistance = 1f; //  0..1  (вплотную..на пределе видимости)
     [HideInInspector] public float rawDistance = -1f;       // м, -1 если не виден
+    [HideInInspector] public float confidence = 0f;         //  0..1  (аналог packet.conf реального YOLO)
 
     [Header("Отладка")]
     public bool drawGizmos = true;
@@ -57,6 +75,7 @@ public class SimulatedYoloCamera : MonoBehaviour
         verticalAngle      = 0f;
         normalizedDistance = 1f;
         rawDistance        = -1f;
+        confidence         = 0f;
 
         if (cameraComponent == null || targetBall == null) return;
 
@@ -103,6 +122,11 @@ public class SimulatedYoloCamera : MonoBehaviour
         verticalAngle      = Mathf.Clamp(angleV / (verticalFovDegrees   * 0.5f), -1f, 1f);
         rawDistance        = dist;
         normalizedDistance = Mathf.Clamp01(dist / maxRange);
+
+        // Синтетический аналог packet.conf: падает с дистанцией (дальше — меньше пикселей на
+        // мяче, ниже уверенность реального детектора) + случайный джиттер кадр-к-кадру.
+        float distFrac = Mathf.Clamp01(normalizedDistance / Mathf.Max(0.01f, confidenceFalloff));
+        confidence = Mathf.Clamp01(1f - distFrac + Random.Range(-confidenceJitter, confidenceJitter));
     }
 
     void OnDrawGizmos()

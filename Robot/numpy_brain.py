@@ -11,6 +11,19 @@ numpy_brain.py — inference на чистом numpy, без onnxruntime.
 
 Запуск:
     python3 numpy_brain.py --weights brain_weights.npz
+
+!!! УСТАРЕЛО (не удалено намеренно, зафиксировано на 2026-07-21) !!!
+Этот файл и brain_weights.npz обучены под СТАРУЮ архитектуру Unity-агента:
+  - 3 continuous actions (gas, steer, cam_target) — камера ЕЩЁ была action сети.
+  - 15 наблюдений (OBS_SIZE=15), без confidence/IsSearching/prev-action, БЕЗ tilt камеры.
+Текущий Unity RobotBrain (см. Unity/Assets/Scripts/RobotBrain.cs) — 2 continuous actions
+(камера полностью автономна, см. CameraAimController.cs), 17 наблюдений и другой порядок
+полей. Матрицы весов здесь имеют ЖЁСТКО зашитую форму (15→256 вход, 128→3 выход) — их
+физически нельзя скормить новой схеме без переобучения и повторного экспорта.
+НЕ патчить build_observations()/OBS_SIZE точечно при каждом изменении схемы в Unity — схема
+там ещё не устоялась (открытый вопрос: есть ли на роботе реальный tilt-сервопривод камеры,
+см. TODO у SERVO_CAMERA_LOW в config.py). Переписывать этот файл ОДНИМ заходом, когда будет
+готов новый экспорт весов под финальную (устоявшуюся) схему наблюдений/actions.
 """
 
 import sys
@@ -80,7 +93,7 @@ def log_tick(tick_data):
 # ==========================================
 # NUMPY FORWARD PASS
 # ==========================================
-OBS_SIZE = 15
+OBS_SIZE = 15  # УСТАРЕЛО — см. предупреждение в начале файла, схема ещё не финальная
 HIDDEN_SIZE = 128
 INFERENCE_HZ = 10
 CAMERA_SERVO_MAX_ANGLE = 90.0
@@ -250,6 +263,10 @@ def init_arm():
     time.sleep(0.3)
     servo.set(cfg.SERVO_CLAW, cfg.ANGLE_CLAW_OPEN)
     time.sleep(0.3)
+    # TODO (не подтверждено, 2026-07-21): единственное место, где SERVO_CAMERA_LOW вообще
+    # используется — фиксируется в 90° и больше никогда не трогается. Похоже на тилт камеры,
+    # но физически не проверено (см. TODO в config.py). Если это подтвердится — здесь и
+    # появится динамическое управление наклоном, синхронно с Unity CameraAimController.
     servo.set(cfg.SERVO_CAMERA_LOW, 90)
 
 def gripper_grab():

@@ -9,15 +9,28 @@ using UnityEngine;
 ///      -maxAngleDeg и +maxAngleDeg (СНАЧАЛА в ту сторону, где мяч видели последний раз),
 ///      И ОДНОВРЕМЕННО зигзаг по tilt между searchTiltMinDeg и searchTiltMaxDeg — чтобы
 ///      обшаривать разную высоту, а не только разворот в одной горизонтальной плоскости.
-///   3) Движение камеры всегда ДИСКРЕТНО (обе оси) — реальный дешёвый сервопривод
-///      физически не может двигаться плавнее и быстрее. PID работает НАД дискретным
-///      шагом (выбирает, в какую сторону шагнуть на этом тике), а не выдаёт непрерывный
-///      угол, который потом пришлось бы квантовать.
+///   3) Движение камеры всегда ДИСКРЕТНО (обе оси) — реальный дешёвый сервопривод физически
+///      не может встать в произвольный угол, только в одно из положений с шагом stepQuantumDeg.
+///      Величина шага ПРОПОРЦИОНАЛЬНА ошибке (растёт от stepDeg/tiltStepDeg при малой ошибке
+///      до maxStepDeg/maxTiltStepDeg при большой, см. QuantizedProportionalStep) — раньше PID
+///      использовался только по ЗНАКУ выхода, сама величина (и, соответственно, Kp) вообще
+///      ни на что не влияли.
 ///
 /// Работает независимо от decision period ML-Agents — вызывается из RobotBrain.FixedUpdate()
 /// каждый физический тик. Сеть получает оба угла камеры (CurrentAngleDeg, CurrentTiltDeg)
 /// как наблюдения и учится доворачивать КОРПУС туда же, куда сейчас смотрит камера
 /// по горизонтали (см. bodyCameraAlignmentBonus в RobotBrain).
+///
+/// TODO (НЕ ПОДТВЕРЖДЕНО, на 2026-07-21): физически не проверено, есть ли у реального GFS-X
+/// отдельный сервопривод под наклон (tilt) камеры. В Robot/config.py есть второй серво-канал
+/// SERVO_CAMERA_LOW=7 (отдельно от SERVO_CAMERA_PAN=8), но в Robot/numpy_brain.py он всего
+/// раз выставляется в 90° при инициализации (init_arm()) и дальше НИКОГДА не управляется
+/// динамически — то есть похоже на реальный тилт-сервопривод, но подключённый к текущему
+/// (устаревшему) циклу управления. Если выяснится, что SERVO_CAMERA_LOW — НЕ наклон камеры
+/// (а что-то другое, например фиксированная высота крепления) — весь тилт здесь (PID, поиск
+/// по tilt, CurrentTiltDeg как наблюдение в RobotBrain) нужно убирать: по правилу проекта,
+/// если реальный робот не может измерить/исполнить параметр — в симуляции его тоже быть
+/// не должно (см. обсуждение и удаление heading/delta.x/delta.z по этой же причине).
 /// </summary>
 public class CameraAimController : MonoBehaviour
 {
@@ -54,13 +67,31 @@ public class CameraAimController : MonoBehaviour
     public float maxTiltDeg = 0f;
 
     [Header("Дискретный шаг ПРИ СЛЕЖЕНИИ (эмуляция реального сервопривода)")]
-    [Tooltip("Шаг ПОВОРОТА при слежении, градусы. Референс реального железа: 1-2°.")]
+    [Tooltip("МИНИМАЛЬНЫЙ шаг ПОВОРОТА при слежении, градусы — применяется, когда ошибка только " +
+             "чуть выше centerDeadband. Дальше шаг растёт пропорционально ошибке до maxStepDeg — " +
+             "чем мяч дальше от центра, тем сильнее доворот за один тик. Референс реального железа: 1-2°.")]
     [Range(0.5f, 5f)]
     public float stepDeg = 1.5f;
-    [Tooltip("Шаг НАКЛОНА при слежении, градусы. Диапазон наклона узкий (обычно 10°), " +
+    [Tooltip("МАКСИМАЛЬНЫЙ шаг ПОВОРОТА при слежении, градусы — применяется при большой ошибке " +
+             "(мяч у самого края кадра). Между stepDeg и maxStepDeg шаг растёт линейно от величины " +
+             "|Kp × error| (и Ki/Kd, если включены) — раньше величина выхода PID вообще ни на " +
+             "что не влияла, использовался только её знак, и Kp был бесполезен для управления резкостью.")]
+    [Range(0.5f, 15f)]
+    public float maxStepDeg = 4f;
+    [Tooltip("МИНИМАЛЬНЫЙ шаг НАКЛОНА при слежении, градусы. Диапазон наклона узкий (обычно 10°), " +
              "поэтому шаг обычно чуть меньше, чем у поворота.")]
     [Range(0.25f, 5f)]
     public float tiltStepDeg = 1f;
+    [Tooltip("МАКСИМАЛЬНЫЙ шаг НАКЛОНА при слежении, градусы — та же логика, что и maxStepDeg выше.")]
+    [Range(0.25f, 8f)]
+    public float maxTiltStepDeg = 2.5f;
+    [Tooltip("Дискрет реального сервопривода, градусы. Шаг, посчитанный пропорционально ошибке, " +
+             "всегда ОКРУГЛЯЕТСЯ ВНИЗ до ближайшего кратного этому значению (но не меньше одного " +
+             "дискрета) — реальный серво физически не может встать в произвольный угол, только " +
+             "в одно из дискретных положений; округление именно вниз, а не вверх — чтобы шаг " +
+             "никогда не перелетал то, что просил регулятор.")]
+    [Range(0.1f, 2f)]
+    public float stepQuantumDeg = 0.5f;
     [Tooltip("Минимальный интервал между шагами ПРИ СЛЕЖЕНИИ, сек (общий для обеих осей — " +
              "реальный серво-контроллер обычно обновляет оба канала одним тактом). " +
              "При 0.05 сек это ~20 шагов/сек потолок.")]
@@ -124,6 +155,12 @@ public class CameraAimController : MonoBehaviour
     /// Читает RobotBrain для наблюдения сети.</summary>
     public float CurrentTiltDeg { get; private set; }
 
+    /// <summary>true = камера потеряла мяч и качается в поиске (см. класс-комментарий, пункт 2),
+    /// false = уверенно следит за мячом (или мяч только что появился и это первый тик). Читает
+    /// RobotBrain как наблюдение — сеть должна знать РЕЖИМ камеры, а не только её текущий угол:
+    /// "камера мечется в поиске" и "камера уверенно ведёт цель" по одному лишь углу неразличимы.</summary>
+    public bool IsSearching => _searching;
+
     PidController _pidYaw;
     PidController _pidTilt;
 
@@ -182,20 +219,19 @@ public class CameraAimController : MonoBehaviour
             if (needStepH)
             {
                 float pidOutH = _pidYaw.Update(errorH, stepIntervalSeconds);
-                ApplyYawStep(Mathf.Sign(pidOutH), stepDeg);
+                float stepH = QuantizedProportionalStep(pidOutH, kP, stepDeg, maxStepDeg);
+                ApplyYawStep(Mathf.Sign(pidOutH), stepH);
             }
 
             if (needStepV)
             {
                 float pidOutV = _pidTilt.Update(errorV, stepIntervalSeconds);
+                float stepV = QuantizedProportionalStep(pidOutV, tiltKp, tiltStepDeg, maxTiltStepDeg);
                 // errorV положительный = мяч НИЖЕ центра кадра (соглашение из SimulatedYoloCamera).
-                // Чтобы центрировать, камере нужно наклониться ВНИЗ, то есть УМЕНЬШИТЬ
-                // CurrentTiltDeg (0 = горизонт, отрицательные значения = вниз). Поэтому шаг
-                // берётся с ОБРАТНЫМ знаком относительно pidOutV.
-                // ПРОВЕРЬ ЭМПИРИЧЕСКИ: если на практике камера при мяче внизу кадра вместо
-                // наклона вниз задирается вверх — просто убери минус на следующей строке,
-                // это единственное место, которое нужно будет поменять.
-                ApplyTiltStep(-Mathf.Sign(pidOutV), tiltStepDeg);
+                // ПОДТВЕРЖДЕНО ЭМПИРИЧЕСКИ (на практике): с минусом камера при приближении мяча
+                // (мяч уходит вниз кадра) задирала взгляд ВВЕРХ вместо наклона вниз — знак был
+                // перепутан. Шаг теперь берётся С ТЕМ ЖЕ знаком, что и pidOutV, без инверсии.
+                ApplyTiltStep(Mathf.Sign(pidOutV), stepV);
             }
         }
         else
@@ -241,6 +277,21 @@ public class CameraAimController : MonoBehaviour
             if (tiltAtExtreme) _searchTiltDir *= -1;
             ApplyTiltStep(_searchTiltDir, searchTiltStepDeg, searchTiltMinDeg, searchTiltMaxDeg);
         }
+    }
+
+    /// <summary>
+    /// Величина шага сервопривода ПРОПОРЦИОНАЛЬНА ошибке — |pidOut|/kp даёт нормированную
+    /// 0..1 "силу" ошибки (при Ki=Kd=0, как по умолчанию, это ровно |error|), которая линейно
+    /// превращается в шаг между minStep и maxStep. Результат округляется ВНИЗ до ближайшего
+    /// кратного stepQuantumDeg — реальный серво умеет только дискретные положения, а округление
+    /// именно вниз (не вверх) не даёт шагу перелетать то, что попросил регулятор.
+    /// </summary>
+    float QuantizedProportionalStep(float pidOut, float kp, float minStep, float maxStep)
+    {
+        float mag = kp > 0.0001f ? Mathf.Clamp01(Mathf.Abs(pidOut) / kp) : 0f;
+        float raw = Mathf.Lerp(minStep, maxStep, mag);
+        float quantized = Mathf.Floor(raw / stepQuantumDeg) * stepQuantumDeg;
+        return Mathf.Max(stepQuantumDeg, quantized);
     }
 
     void ApplyYawStep(float direction, float stepSizeDeg)

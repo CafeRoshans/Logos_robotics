@@ -8,7 +8,7 @@ using System.Collections.Generic;
 /// <summary>
 /// ML-Agents агент для робота GFS-X.
 /// Настройки Behavior Parameters (задаются в инспекторе):
-///   Vector Observation Space Size = 16
+///   Vector Observation Space Size = 17
 ///   Stacked Vectors               = 4
 ///   Continuous Actions            = 2   (gas [-1..1], steering [-1..1])
 ///   Discrete Branches             = 1 (legacy) или 0 (useAutomaticGripper=true, дефолт)
@@ -127,12 +127,6 @@ public class RobotBrain : Agent
              "чем задеть случайный блок, поэтому по умолчанию true: любое касание стены сразу " +
              "обрывает эпизод, даже если столкновения с препятствиями штрафуются мягче.")]
     public bool   endEpisodeOnWallHit      = true;
-    public string obstacleTag = "Obstacle";
-    [Tooltip("Разовый штраф при физическом касании препятствия.")]
-    public float obstacleCollisionPenalty = 1.0f;
-    [Tooltip("Завершать эпизод при столкновении с препятствием (сильный сигнал, но короче эпизоды). " +
-             "false = только штраф, обучение продолжается.")]
-    public bool endEpisodeOnObstacleHit = false;
 
     [Tooltip("Терминальный бонус за успешный захват своего мяча.")]
     public float grabSuccessReward      = 8.0f;
@@ -221,6 +215,13 @@ public class RobotBrain : Agent
     public int   bodyAlignmentStreakCap = 30;
 
 
+    [Header("Клешня")]
+    [Tooltip("true (дефолт) = клешня хватает автоматически по ИК-датчику (GripperController.CanGrab), " +
+             "сеть НЕ решает 'когда хватать' — Discrete Branches в Behavior Parameters должен быть 0. " +
+             "false = legacy-режим, сеть сама выбирает момент через discrete action (idle/grab/release) — " +
+             "нужен Discrete Branches = 1. Поле вызывалось в OnActionReceived, но нигде не было " +
+             "объявлено (CS0103) — видимо, потерялось при переносе клешни на автоматический режим.")]
+    public bool useAutomaticGripper = true;
     [Tooltip("Порог ИК клешни, выше которого считаем, что мяч действительно рядом")]
     public float grabProximityIRThreshold = 0.5f;
 
@@ -278,8 +279,11 @@ public class RobotBrain : Agent
              "±0.02 = максимум 2% разницы между L и R. Реалистично.")]
     [Range(0f, 0.10f)]
     public float motorPerSideJitter = 0.02f;
-    [Tooltip("Разброс максимальной скорости робота (maxLinearCmd), м/сек. " +
-             "0.6..1.0 = более-менее сильный/слабый АКБ или трение.")]
+    [Tooltip("Разброс максимальной скорости робота — ДОЛЯ (0..1) от nominalMaxLinearCmd, " +
+             "а НЕ абсолютная скорость в м/с. 0.6..1.0 = 60-100% от номинала (почти севшая / " +
+             "свежая АКБ или трение). БЫЛО багом: раньше эти числа брались как абсолютные м/с, " +
+             "и при nominalMaxLinearCmd=0.25 это давало tracks.maxLinearCmd = 0.6..1.0 м/с — в " +
+             "2.4-4× БЫСТРЕЕ номинала (и быстрее реального робота, ~0.57 м/с). См. wearRatio ниже.")]
     public float robotMaxSpeedMin = 0.6f;
     public float robotMaxSpeedMax = 1.0f;
     [Tooltip("НОМИНАЛЬНАЯ (не изношенная) максимальная линейная скорость робота, м/с — " +
@@ -296,8 +300,17 @@ public class RobotBrain : Agent
     [Header("YOLO Burst Dropout — потеря мяча при резких поворотах")]
     [Tooltip("Включить симуляцию смаза YOLO при быстром вращении робота")]
     public bool enableYoloBurstDropout = true;
-    [Tooltip("Порог угловой скорости робота (град/сек), после которого камера 'смазывается' и YOLO теряет мяч. " +
-             "Для реального GFS-X ~90 деg/сек = быстрый разворот.")]
+    [Tooltip("Реальный средний FPS камеры на GFS-X (сейчас ~45). Смаз — это честная физика " +
+             "'сколько робот повернулся за время ОДНОГО кадра', а не произвольная константа " +
+             "град/сек: порог = cameraFps × maxBlurDegPerFrame (см. ниже).")]
+    public float cameraFps = 45f;
+    [Tooltip("Сколько градусов поворота ЗА ОДИН КАДР камера ещё 'прощает' без потери детекции — " +
+             "грубая оценка, ПРОВЕРЬ ЭМПИРИЧЕСКИ на реальном YOLO: покрути реальный робот с " +
+             "контролируемой угловой скоростью, найди скорость, на которой детекция реально " +
+             "начинает пропадать, раздели на cameraFps и подставь сюда.")]
+    public float maxBlurDegPerFrame = 4f;
+    [Tooltip("Абсолютный фолбэк-порог (град/сек) — используется, только если cameraFps <= 0 " +
+             "(FPS-модель отключена).")]
     public float angularSpeedDropoutThreshold = 90f;
     [Tooltip("Мин. длительность burst dropout в решениях (5 при DecisionPeriod=5 ≈ 0.5 сек)")]
     public int burstDropoutMinSteps = 5;
@@ -370,7 +383,6 @@ public class RobotBrain : Agent
     private float _wM_term,  _wM2_term;
     private int   _dropoutBurstsCount = 0; // сколько burst dropout произошло за эпизод
     private int   _wrongBallGrabbedCount = 0; // сколько раз схватили чужой мяч (мульти-арена)
-    private int _dropoutBurstsCount = 0; // сколько burst dropout произошло за эпизод
 
     private Queue<float[]> actionBuffer = new Queue<float[]>();
 
@@ -399,6 +411,11 @@ public class RobotBrain : Agent
     {
         if (useRealRobot) return yolo != null ? yolo.normalizedDistance : 1f;
         return simCam != null ? simCam.normalizedDistance : 1f;
+    }
+    float VisionConfidence()
+    {
+        if (useRealRobot) return yolo != null ? yolo.confidence : 0f;
+        return simCam != null ? simCam.confidence : 0f;
     }
 
     public override void Initialize()
@@ -579,8 +596,15 @@ public class RobotBrain : Agent
             tracks.leftSpeedMul = commonMul * (1f + leftJitter);
             tracks.rightSpeedMul = commonMul * (1f + rightJitter);
 
-            // Максимальная скорость робота — эмулирует АКБ или трение
-            tracks.maxLinearCmd = Mathf.Max(0.05f, Random.Range(robotMaxSpeedMin, robotMaxSpeedMax));
+            // Максимальная скорость робота — эмулирует АКБ/трение. robotMaxSpeedMin/Max — ДОЛЯ
+            // от nominalMaxLinearCmd (см. тултип поля), не абсолютные м/с — раньше здесь было
+            // Random.Range(robotMaxSpeedMin, robotMaxSpeedMax) НАПРЯМУЮ как м/с, что при
+            // nominalMaxLinearCmd=0.25 разгоняло робота до 0.6-1.0 м/с (быстрее номинала И
+            // реального робота) и через wearRatio ниже раздувало maxAngularSpeedDeg до сотен
+            // градусов/сек — робот почти всегда пересекал angularSpeedDropoutThreshold на любом
+            // повороте, и YOLO "слепла" в разы чаще, чем задумано.
+            float speedFraction = Mathf.Clamp(Random.Range(robotMaxSpeedMin, robotMaxSpeedMax), 0.01f, 2f);
+            tracks.maxLinearCmd = Mathf.Max(0.02f, nominalMaxLinearCmd * speedFraction);
 
             // Угловой предел — те же самые моторы/редукторы, что и линейный, поэтому износ
             // должен ослаблять оба предела ПРОПОРЦИОНАЛЬНО, а не оставлять maxAngularSpeedDeg
@@ -647,6 +671,22 @@ public class RobotBrain : Agent
         return z * stddev;
     }
 
+    // Online mean/variance между эпизодами (алгоритм Уэлфорда) — вызывались из LogEpisodeStats,
+    // но сами методы отсутствовали в проекте (CS0103 после мержа). mean обновляется по месту
+    // (ref), m2 — накопленная сумма квадратов отклонений, из которой WelfordStd достаёт std.
+    static void WelfordUpdate(float newValue, ref float mean, ref float m2, int n)
+    {
+        float delta = newValue - mean;
+        mean += delta / n;
+        float delta2 = newValue - mean;
+        m2 += delta * delta2;
+    }
+
+    static float WelfordStd(float m2, int n)
+    {
+        return n >= 2 ? Mathf.Sqrt(m2 / (n - 1)) : 0f;
+    }
+
     public override void CollectObservations(VectorSensor sensor)
     {
 
@@ -700,6 +740,12 @@ public class RobotBrain : Agent
         // диапазону [cameraAim.minTiltDeg .. cameraAim.maxTiltDeg]. Помогает сети точнее
         // судить о геометрии — например, отличать "мяч близко и камера сильно опущена"
         // от "мяч далеко, камера почти горизонтально".
+        // TODO (НЕ ПОДТВЕРЖДЕНО, на 2026-07-21): физически не проверено, есть ли на реальном
+        // GFS-X отдельный сервопривод под наклон камеры (см. подробный TODO в
+        // CameraAimController.cs про Robot/config.py SERVO_CAMERA_LOW). Если выяснится, что
+        // тилта физически нет — это наблюдение нужно убрать по правилу "нет на реальном
+        // роботе → не должно быть и в симуляции" (та же причина, по которой убрали heading
+        // и delta.x/delta.z).
         float camTiltDeg = cameraAim != null ? cameraAim.CurrentTiltDeg : 0f;
         float tiltRange = cameraAim != null
             ? Mathf.Max(0.001f, cameraAim.maxTiltDeg - cameraAim.minTiltDeg)
@@ -710,25 +756,31 @@ public class RobotBrain : Agent
         // 11. hasBall
         sensor.AddObservation(gripper != null && gripper.isHolding ? 1f : 0f);
 
-        // 12..13. Смещение от старта X/Z (нормализованное)
-        // По сути в реальном роботе считать не может
-        // TODO: попробовать убрать и пообучать
-        Vector3 delta = transform.position - _startPosition;
-        float norm = Mathf.Max(0.001f, Mathf.Max(arenaHalfSize.x, arenaHalfSize.z));
-        sensor.AddObservation(delta.x / norm);
-        sensor.AddObservation(delta.z / norm);
+        // heading (курс робота) убран — на реальном GFS-X нет компаса/IMU, физически
+        // измерить нечем. Было подтверждено тем, что numpy_brain.py на Pi зануляет этот же
+        // слот заглушкой (obs[12]=0.0) — заглушка была честнее, чем то, что было в симуляции.
 
-        // 14. Heading (курс) робота, нормализованный -1..1
-        float heading = transform.eulerAngles.y;
-        if (heading > 180f) heading -= 360f;
-        sensor.AddObservation(heading / 180f);
-
-        // 15. Скорость робота (м/с) — вручную посчитанная по дельте позиции,
+        // 12. Скорость робота (м/с) — вручную посчитанная по дельте позиции,
         // а не rb.linearVelocity (для кинематического Rigidbody она всегда 0).
         sensor.AddObservation(_lastVelocity.magnitude);
 
-        // 16. Время с последней детекции мяча (сек)
+        // 13. Время с последней детекции мяча (сек)
         sensor.AddObservation(_timeSinceLastDetection);
+
+        // 14. Уверенность детекции (0..1) — на реальном роботе это packet.conf от YOLO
+        // (реально приходит по UDP, раньше просто выбрасывался), в симуляции — синтетический
+        // аналог, падающий с дистанцией (см. SimulatedYoloCamera.confidence). Даёт сети сигнал
+        // "насколько верить" текущему наблюдению вместо жёсткого бинарного visible.
+        sensor.AddObservation(visible ? VisionConfidence() : 0f);
+
+        // 15. Камера в режиме ПОИСКА (мяч потерян, качается) vs СЛЕЖЕНИЯ. Без этого сеть не
+        // отличит "камера уверенно ведёт цель" от "камера мечется в поиске" по одному лишь углу.
+        sensor.AddObservation(cameraAim != null && cameraAim.IsSearching ? 1f : 0f);
+
+        // 16..17. Предыдущее действие (gas/steer с прошлого решения) — реальный робот всегда
+        // знает, что сам последний раз скомандовал, это не "нечестная" информация.
+        sensor.AddObservation(_prevGas);
+        sensor.AddObservation(_prevSteer);
     }
 
     /// <summary>
@@ -1394,7 +1446,14 @@ public class RobotBrain : Agent
         float decisionDeltaTime = Mathf.Max(0.001f, Time.deltaTime);
         float angularSpeedDegPerSec = Mathf.Abs(deltaDeg) / decisionDeltaTime;
 
-        if (enableYoloBurstDropout && angularSpeedDegPerSec > angularSpeedDropoutThreshold && _dropoutStepsLeft <= 0)
+        // Смаз = поворот за время экспозиции ОДНОГО кадра реальной камеры (1/cameraFps сек),
+        // а не абсолютная константа град/сек — так порог остаётся физически осмысленным
+        // независимо от того, как рандомизируется мотор в конкретном эпизоде.
+        float effectiveDropoutThreshold = cameraFps > 0.01f
+            ? cameraFps * maxBlurDegPerFrame
+            : angularSpeedDropoutThreshold;
+
+        if (enableYoloBurstDropout && angularSpeedDegPerSec > effectiveDropoutThreshold && _dropoutStepsLeft <= 0)
         {
             _dropoutStepsLeft = Random.Range(burstDropoutMinSteps, burstDropoutMaxSteps + 1);
             _dropoutBurstsCount++;

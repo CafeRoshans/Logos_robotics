@@ -1941,7 +1941,7 @@ MonoBehaviour:
   targetBall: {fileID: 2662588395027316777}
   horizontalFovDegrees: 40
   verticalFovDegrees: 40
-  maxRange: 2
+  maxRange: 8
   obstacleMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -2586,7 +2586,7 @@ MonoBehaviour:
   obstacleSpawner: {fileID: 401300216358652757}
   useRealRobot: 0
   rosBridge: {fileID: 6364411629071752895}
-  cameraServoMaxAngle: 90
+  cameraServoMaxAngle: 45
   arenaCenterOffset: {x: 0, y: 0, z: 2.9}
   arenaHalfSize: {x: 1.4, y: 1, z: 3.2}
   distanceRewardScale: 1
@@ -2597,11 +2597,11 @@ MonoBehaviour:
   timeoutPenalty: 1
   obstacleTag: Obstacle
   wallTag: Wall
-  obstacleCollisionPenalty: 1
+  obstacleCollisionPenalty: 4
   endEpisodeOnObstacleHit: 0
   endEpisodeOnWallHit: 1
-  grabSuccessReward: 20
-  blindApproachBonus: 0.0001
+  grabSuccessReward: 8
+  blindApproachBonus: 0.003
   blindApproachMinForwardSpeed: 0.05
   ultrasonicNoise: 0.07
   visionAngleNoise: 0.03
@@ -2609,8 +2609,8 @@ MonoBehaviour:
   sensorLatencySteps: 3
   useYamlEnvParams: 1
   hardStopOnHold: 1
-  perStepPenalty: 0.002
-  outOfArenaPenalty: 2
+  perStepPenalty: 0.0005
+  outOfArenaPenalty: 3.5
   gentleLinearSpeedThresh: 0.08
   gentleAngularSpeedThresh: 0.15
   gentlePlacementBonus: 0.008
@@ -2621,9 +2621,10 @@ MonoBehaviour:
   centeringStreakCap: 30
   centeringAngleThreshold: 0.25
   centeringMinMovement: 0.03
-  bodyCameraAlignmentBonus: 0.08
+  bodyCameraAlignmentBonus: 0.007
   bodyCameraAlignmentToleranceDeg: 2
   bodyAlignmentStreakCap: 30
+  useAutomaticGripper: 1
   grabProximityIRThreshold: 0.5
   randomizeSpawnPositions: 1
   minRobotBallDistance: 0.6
@@ -2657,10 +2658,12 @@ MonoBehaviour:
   robotMaxSpeedMin: 0.6
   robotMaxSpeedMax: 1
   nominalMaxLinearCmd: 0.25
-  nominalMaxAngularSpeedDeg: 120
+  nominalMaxAngularSpeedDeg: 75
   motorPwmStepMin: 10
   motorPwmStepMax: 20
   enableYoloBurstDropout: 1
+  cameraFps: 45
+  maxBlurDegPerFrame: 4
   angularSpeedDropoutThreshold: 90
   burstDropoutMinSteps: 5
   burstDropoutMaxSteps: 15
@@ -2799,9 +2802,12 @@ MonoBehaviour:
   maxAngleDeg: 45
   minTiltDeg: -15
   maxTiltDeg: 0
-  stepDeg: 2
+  stepDeg: 1.5
+  maxStepDeg: 5
   tiltStepDeg: 1
-  stepIntervalSeconds: 0.01
+  maxTiltStepDeg: 2.5
+  stepQuantumDeg: 0.1
+  stepIntervalSeconds: 0.1
   searchStepDeg: 5
   searchTiltStepDeg: 2
   searchStepIntervalSeconds: 0.02
@@ -2830,7 +2836,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Unity.ML-Agents::Unity.MLAgents.Policies.BehaviorParameters
   m_BrainParameters:
-    VectorObservationSize: 16
+    VectorObservationSize: 17
     NumStackedVectorObservations: 4
     m_ActionSpec:
       m_NumContinuousActions: 2
@@ -2872,8 +2878,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.01081387, y: 0.007150928, z: 0.008162568}
-  m_Center: {x: 0.00010262851, y: 0.0013167135, z: 0.001217543}
+  m_Size: {x: 0.00189956, y: 0.0071509285, z: 0.008162568}
+  m_Center: {x: 0.0045597544, y: 0.0013167101, z: 0.0012175442}
 --- !u!4 &3584056797760340879 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 930764686131392145, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}
@@ -2904,7 +2910,7 @@ MonoBehaviour:
   sensors: {fileID: 434451357782293778}
   holdPoint: {fileID: 1332383385814671726}
   targetBallTag: TargetBall
-  grabSearchRadius: 0.2
+  grabSearchRadius: 0.06
   autoGrabOnSensor: 1
   toggleKey: 1
   isHolding: 0
@@ -2961,8 +2967,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.011658618, y: 0.0071928403, z: 0.008081965}
-  m_Center: {x: 0.000902487, y: 0.000111911744, z: -0.00041492406}
+  m_Size: {x: 0.011658618, y: 0.007192841, z: 0.0030259306}
+  m_Center: {x: 0.000902486, y: 0.00011191145, z: 0.002113094}
 --- !u!1 &7603442679408688801 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6112308227791147967, guid: c06c0aa026cff274390f6b484b9c590f, type: 3}

@@ -44,6 +44,10 @@ public class RealVision : MonoBehaviour
     [HideInInspector] public bool  isVisible       = false;
     [HideInInspector] public float horizontalAngle = 0f;
     [HideInInspector] public float verticalAngle   = 0f;
+    // Уверенность детекции — packet.conf реально приходит от YOLO-пайплайна по UDP,
+    // но раньше просто выбрасывался. Даёт сети честный сигнал "насколько верить" наблюдению
+    // вместо жёсткого бинарного isVisible.
+    [HideInInspector] public float confidence      = 0f;
 
     void Start()
     {
@@ -85,6 +89,7 @@ public class RealVision : MonoBehaviour
                 verticalAngle      = Mathf.Clamp(packet.vAngle, -1f, 1f);
                 normalizedAngle    = horizontalAngle;
                 normalizedDistance = Mathf.Clamp01(packet.distance);
+                confidence         = Mathf.Clamp01(packet.conf);
             }
             else
             {
@@ -93,6 +98,7 @@ public class RealVision : MonoBehaviour
                 verticalAngle      = 0f;
                 normalizedAngle    = 0f;
                 normalizedDistance = 1f;
+                confidence         = 0f;
             }
             _lastPacketTime = Time.time;
         }
@@ -104,6 +110,7 @@ public class RealVision : MonoBehaviour
             horizontalAngle    = 0f;
             verticalAngle      = 0f;
             normalizedDistance = 1f;
+            confidence         = 0f;
         }
     }
 
