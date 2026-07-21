@@ -12,7 +12,7 @@ behaviors:
       num_epoch: 3
     network_settings:
       normalize: true
-      hidden_units: 256
+      hidden_units: 320
       num_layers: 2
       vis_encode_type: simple
       memory:
@@ -76,7 +76,7 @@ environment_parameters:
   ball_spawn_count:
     sampler_type: constant
     sampler_parameters:
-      value: 2
+      value: 6
 
   # Как часто перекладывать препятствия
   obstacle_respawn_every:
@@ -84,132 +84,4 @@ environment_parameters:
     sampler_parameters:
       value: 5
 
-  distance_reward_scale:
-    sampler_type: constant
-    sampler_parameters:
-      value: 1.0
 
-  distance_reward_alpha:
-    sampler_type: constant
-    sampler_parameters:
-      value: 2.0
-
-  close_radius:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.35
-
-  drive_rate_penalty:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.001
-
-  camera_rate_penalty:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.005
-
-  wall_proximity_penalty:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.01
-
-  obstacle_collision_penalty:
-    sampler_type: constant
-    sampler_parameters:
-      value: 1.0
-
-  end_episode_on_obstacle_hit:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0       # 0 = false, 1 = true
-
-  grab_success_reward:
-    sampler_type: constant
-    sampler_parameters:
-      value: 5.0
-
-  timeout_penalty:
-    sampler_type: constant
-    sampler_parameters:
-      value: 1.0
-
-  out_of_arena_penalty:
-    sampler_type: constant
-    sampler_parameters:
-      value: 2.0
-
-  per_step_penalty:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.0015
-
-  gentle_linear_speed_thresh:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.08
-
-  gentle_angular_speed_thresh:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.15
-
-  gentle_placement_bonus:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.008
-
-  gentle_overspeed_penalty:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.015
-
-  centering_bonus_max:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.012
-
-  centering_streak_cap:
-    sampler_type: constant
-    sampler_parameters:
-      value: 30
-
-  centering_angle_threshold:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.25
-
-  centering_min_movement:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.03
-
-  body_camera_alignment_bonus:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.007
-
-  body_camera_alignment_tolerance_deg:
-    sampler_type: constant
-    sampler_parameters:
-      value: 5.0
-
-  blind_approach_bonus:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.004
-
-  blind_approach_min_forward_speed:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.05
-
-  backward_movement_penalty:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.01
-
-  backward_movement_deadzone:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.01

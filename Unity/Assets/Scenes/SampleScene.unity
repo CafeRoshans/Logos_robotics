@@ -1434,7 +1434,7 @@ PrefabInstance:
     - target: {fileID: 448925899835208303, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_Model
       value: 
-      objectReference: {fileID: 5022602860645237092, guid: e2935cf22b1ae44c6bdefe6c4631ff9c, type: 3}
+      objectReference: {fileID: 5022602860645237092, guid: a0654dfc12ecd0b48943fcbc42bb27ba, type: 3}
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: useRealRobot
       value: 0

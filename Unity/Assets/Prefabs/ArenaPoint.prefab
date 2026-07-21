@@ -2466,14 +2466,14 @@ MonoBehaviour:
   closeRadius: 0.35
   driveRatePenalty: 0.001
   wallProximityPenalty: 0.015
-  timeoutPenalty: 0.5
+  timeoutPenalty: 1
   obstacleTag: Obstacle
   wallTag: Wall
   obstacleCollisionPenalty: 1
   endEpisodeOnObstacleHit: 0
   endEpisodeOnWallHit: 1
-  grabSuccessReward: 5
-  blindApproachBonus: 0.003
+  grabSuccessReward: 20
+  blindApproachBonus: 0.0001
   blindApproachMinForwardSpeed: 0.05
   ultrasonicNoise: 0.07
   visionAngleNoise: 0.03
@@ -2482,7 +2482,7 @@ MonoBehaviour:
   useYamlEnvParams: 1
   useAutomaticGripper: 1
   hardStopOnHold: 1
-  perStepPenalty: 0.0015
+  perStepPenalty: 0.002
   outOfArenaPenalty: 2
   gentleLinearSpeedThresh: 0.08
   gentleAngularSpeedThresh: 0.15
@@ -2494,7 +2494,7 @@ MonoBehaviour:
   centeringStreakCap: 30
   centeringAngleThreshold: 0.25
   centeringMinMovement: 0.03
-  bodyCameraAlignmentBonus: 0.04
+  bodyCameraAlignmentBonus: 0.08
   bodyCameraAlignmentToleranceDeg: 2
   bodyAlignmentStreakCap: 30
   grabProximityIRThreshold: 0.5
