@@ -133,11 +133,21 @@ public class RobotBrain : Agent
 
 
     [Header("Blind approach — движение вперёд когда мяч НЕ виден")]
-    [Tooltip("Бонус за каждый шаг, когда робот едет вперёд, но мяч ещё не виден. " +
-             "Стимулирует активный поиск, а не стояние на месте при потере мяча.")]
-    public float blindApproachBonus = 0.003f;
-    [Tooltip("Минимальная реальная скорость вперёд (м/с) для срабатывания blindApproachBonus")]
+    [Tooltip("Бонус за каждый шаг, когда робот реально СМЕЩАЕТСЯ (по модулю скорости, не " +
+             "только строго вперёд — поворот во время движения тоже считается), а мяч ещё " +
+             "не виден. Стимулирует активное исследование пространства, а не стояние/кружение " +
+             "на месте при потере мяча. БЫЛО слишком маленьким (0.003) и считалось только по " +
+             "чисто прямой скорости — сеть находила, что дешевле и безопаснее подождать, пока " +
+             "автономный поиск камеры (CameraAimController) сам наткнётся на мяч, чем рисковать " +
+             "слепым проездом почти без выигрыша в награде.")]
+    public float blindApproachBonus = 0.015f;
+    [Tooltip("Минимальная реальная скорость (м/с, по модулю смещения — не только вперёд) для " +
+             "срабатывания blindApproachBonus / searchIdlePenalty ниже.")]
     public float blindApproachMinForwardSpeed = 0.05f;
+    [Tooltip("Штраф за шаг, когда мяч НЕ виден, а робот почти НЕ смещается (скорость ниже " +
+             "blindApproachMinForwardSpeed) — то есть просто стоит или крутится вокруг своей " +
+             "оси без реального перемещения по арене. Явно отучает от пассивного ожидания.")]
+    public float searchIdlePenalty = 0.004f;
 
     [Header("Шум наблюдений (доменная рандомизация)")]
     [Tooltip("Амплитуда uniform-шума на УЗ (±). Значение читается из yaml, если useYamlEnvParams=true.")]
@@ -234,8 +244,16 @@ public class RobotBrain : Agent
     [Tooltip("Минимальное расстояние между роботом и мячом при спавне (м). " +
              "Ставь >= размера мяча + захвата, чтобы робот не заспавнился на мяче.")]
     public float minRobotBallDistance = 0.6f;
-    [Tooltip("Рандомизировать поворот робота при спавне (0..360°)")]
+    [Tooltip("Небольшой случайный разброс (±град) вокруг направления 'на центр арены' при " +
+             "спавне — чтобы сеть не запоминала идеально одно и то же направление на каждой " +
+             "точке. БЫЛО багом: поле объявлялось, но нигде не читалось — поворот при спавне " +
+             "всегда оставался _startRotation (фиксированный, из редактора) независимо от того, " +
+             "какая точка выбрана, из-за чего на части точек робот оказывался повёрнут прямо " +
+             "в стену/препятствие на границе арены.")]
     public bool randomizeRobotHeading = true;
+    [Tooltip("Амплитуда случайного отклонения (±град) от направления на центр арены, если " +
+             "randomizeRobotHeading=true.")]
+    public float headingJitterDeg = 30f;
 
     [Header("Спавн мяча — фиксированные точки")]
     [Tooltip("Массив точек-кандидатов для мяча (например, середины 4 бортиков арены). " +
@@ -505,6 +523,21 @@ public class RobotBrain : Agent
         {
             int i = Random.Range(0, robotSpawnPoints.Length);
             robotPos = robotSpawnPoints[i].position;
+
+            // Ориентация — на центр арены (т.е. на противоположную стену от точки спавна),
+            // а не фиксированный _startRotation. Точки спавна стоят у границы арены с
+            // identity-поворотом (без своего направления) — раньше робот мог оказаться
+            // развёрнут прямо в стену/препятствие на границе. randomizeRobotHeading добавляет
+            // небольшой разброс (±headingJitterDeg), чтобы не запоминалось одно и то же
+            // направление на каждой точке.
+            Vector3 dirToCenter = (_startPosition + arenaCenterOffset) - robotPos;
+            dirToCenter.y = 0f;
+            if (dirToCenter.sqrMagnitude > 0.0001f)
+            {
+                robotRot = Quaternion.LookRotation(dirToCenter.normalized, Vector3.up);
+                if (randomizeRobotHeading)
+                    robotRot = Quaternion.Euler(0f, Random.Range(-headingJitterDeg, headingJitterDeg), 0f) * robotRot;
+            }
         }
 
         // --- Позиция мяча: случайная из ballSpawnPoints ---
@@ -1025,11 +1058,26 @@ public class RobotBrain : Agent
             AddReward(-Mathf.Abs(forwardSpeed) * backwardMovementPenalty);
         }
 
-        // е.1) BLIND APPROACH — бонус за движение вперёд когда мяч НЕ виден.
-        if (!ballVisible && forwardSpeed > blindApproachMinForwardSpeed)
+        // е.1) BLIND SEARCH — бонус за реальное перемещение по арене (по модулю скорости,
+        // не только строго вперёд — поворот во время движения тоже считается) когда мяч НЕ
+        // виден, и симметричный штраф, если робот почти не смещается (стоит или крутится на
+        // месте без толку). Раньше считалось только по forwardSpeed строго по прямой и без
+        // штрафа за пассивность — сеть научилась просто ждать, пока автономный поиск камеры
+        // сам наткнётся на мяч, вместо активного исследования телом (а тело двигать НАДО,
+        // когда мяч вне сектора поиска камеры — сама камера сектор не расширит).
+        if (!ballVisible)
         {
-            AddReward(blindApproachBonus);
-            _rewardCenter += blindApproachBonus;  // логируем как part of "center/search" cluster
+            float searchSpeed = _lastVelocity.magnitude;
+            if (searchSpeed > blindApproachMinForwardSpeed)
+            {
+                AddReward(blindApproachBonus);
+                _rewardCenter += blindApproachBonus;  // логируем как part of "center/search" cluster
+            }
+            else
+            {
+                AddReward(-searchIdlePenalty);
+                _rewardCenter -= searchIdlePenalty;
+            }
         }
 
         // е.2) PHASE 2 — медленный точный подъезд (dist < closeRadius).

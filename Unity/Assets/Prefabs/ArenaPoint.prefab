@@ -2604,7 +2604,7 @@ MonoBehaviour:
   endEpisodeOnObstacleHit: 0
   endEpisodeOnWallHit: 1
   grabSuccessReward: 6
-  blindApproachBonus: 0.003
+  blindApproachBonus: 0.015
   blindApproachMinForwardSpeed: 0.05
   ultrasonicNoise: 0.07
   visionAngleNoise: 0.03
