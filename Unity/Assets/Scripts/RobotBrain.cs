@@ -89,8 +89,15 @@ public class RobotBrain : Agent
     public float driveRatePenalty = 0.001f;
     [Tooltip("Штраф за резкое изменение camTarget между шагами. Важнее езды — камера дёргает в реальном мире. ")]
     public float cameraRatePenalty = 0.005f;
-    [Tooltip("Штраф за критически близкую стену (по ИК/УЗ). Каждый сенсор, который срабатывает = -этот штраф/шаг.")]
+    [Tooltip("Штраф за близость стены. Для УЗ — мягкий градиент: penalty × (1 - uNorm/startNorm)². " +
+             "Для ИК — бинарно (сработал = штраф). Даёт непрерывный сигнал 'держи дистанцию', " +
+             "а не бинарный '10 см = плохо'.")]
     public float wallProximityPenalty = 0.01f;
+    [Tooltip("Порог УЗ (в нормализованных 0..1), с которого начинает расти градиентный штраф. " +
+             "0.3 при usMaxRange=2м = штраф начинается с 60 см, максимум в 0 см. Меньше = ближе " +
+             "к препятствию начинается реакция.")]
+    [Range(0.05f, 1f)]
+    public float wallProximityStartNorm = 0.3f;
 
     [Tooltip("Штраф за окончание эпизода по таймауту")]
     public float timeoutPenalty = 1.0f;
@@ -786,13 +793,22 @@ public class RobotBrain : Agent
             }
         }
 
-        // г) Штраф за критически близкие стены
+        // г) Штраф за близость препятствий.
+        //    УЗ — мягкий градиент: чем ближе (uNorm→0), тем больше штраф.
+        //      proximity = clamp01(1 - uNorm/startNorm), penalty ∝ proximity².
+        //      Даёт непрерывный сигнал "держи дистанцию заранее", а не бинарный "уже впритык".
+        //    ИК — бинарный сенсор, так что штраф бинарный (сработал = -penalty).
         if (sensors != null)
         {
             float wallPen = 0f;
-            if (sensors.ultrasonicNormalized < 0.05f) wallPen += wallProximityPenalty;
+
+            float startNorm = Mathf.Max(0.001f, wallProximityStartNorm);
+            float proximity = Mathf.Clamp01(1f - sensors.ultrasonicNormalized / startNorm);
+            wallPen += wallProximityPenalty * proximity * proximity;
+
             if (sensors.leftIR == 1) wallPen += wallProximityPenalty;
             if (sensors.rightIR == 1) wallPen += wallProximityPenalty;
+
             if (wallPen > 0f) { AddReward(-wallPen); _rewardWall -= wallPen; }
         }
 
@@ -1064,6 +1080,10 @@ public class RobotBrain : Agent
         {
             float v = env.GetWithDefault("wall_proximity_penalty", -1f);
             if (v >= 0f) wallProximityPenalty = v;
+        }
+        {
+            float v = env.GetWithDefault("wall_proximity_start_norm", -1f);
+            if (v >= 0f) wallProximityStartNorm = Mathf.Clamp(v, 0.05f, 1f);
         }
         {
             float v = env.GetWithDefault("obstacle_collision_penalty", -1f);

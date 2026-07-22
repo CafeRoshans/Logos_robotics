@@ -1356,7 +1356,7 @@ PrefabInstance:
       objectReference: {fileID: 5022602860645237092, guid: e2935cf22b1ae44c6bdefe6c4631ff9c, type: 3}
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: useRealRobot
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 848217477165904138, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: perStepPenalty
@@ -1380,7 +1380,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4827791581018501935, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: useYOLO
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5089989243390918077, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_Name
@@ -1437,6 +1437,14 @@ PrefabInstance:
     - target: {fileID: 8865409503205789608, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_BehaviorType
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8865409503205789608, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: m_BrainParameters.VectorObservationSize
+      value: 13
+      objectReference: {fileID: 0}
+    - target: {fileID: 8865409503205789608, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
+      propertyPath: m_BrainParameters.NumStackedVectorObservations
+      value: 5
       objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 448925899835208303, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
