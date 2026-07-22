@@ -60,7 +60,7 @@ csv_header = (
     "uz_raw,uz_norm,ir_l_raw,ir_r_raw,ir_g_raw,ir_l,ir_r,ir_g,"
     "yolo_vis,yolo_angle,yolo_dist,"
     "obs_0,obs_1,obs_2,obs_3,obs_4,obs_5,obs_6,obs_7,"
-    "obs_8,obs_9,obs_10,obs_11,obs_12,obs_13,obs_14,"
+    "obs_8,obs_9,obs_10,obs_11,obs_12,"
     "act_gas,act_steer,act_cam,"
     "v_left,v_right,pwm_l,pwm_r,"
     "cam_angle,holding"
@@ -80,10 +80,11 @@ def log_tick(tick_data):
 # ==========================================
 # NUMPY FORWARD PASS
 # ==========================================
-OBS_SIZE = 15
+OBS_SIZE = 13
 HIDDEN_SIZE = 128
 INFERENCE_HZ = 10
-CAMERA_SERVO_MAX_ANGLE = 90.0
+CAMERA_SERVO_MAX_ANGLE = cfg.CAMERA_SERVO_MAX_ANGLE
+CAMERA_CENTER = cfg.CAMERA_SERVO_CENTER
 
 class NumpyBrain:
     def __init__(self, weights_path):
@@ -238,7 +239,7 @@ def set_motors_pwm(pwm_left, pwm_right):
 # ==========================================
 # СЕРВО
 # ==========================================
-current_camera_angle = 90.0
+current_camera_angle = cfg.CAMERA_SERVO_CENTER
 is_holding = False
 
 def init_arm():
@@ -274,14 +275,18 @@ def gripper_prepare():
 
 def apply_camera(target_normalized):
     global current_camera_angle
-    target_deg = 90 - (target_normalized * 90)
-    target_deg = clamp(target_deg, 0, 180)
+    # Диапазон ограничен ±CAMERA_SERVO_MAX_ANGLE от центра (sync с Unity):
+    # УЗ связан с камерой, широкий поворот слепит фронт. norm=+1 → центр-угол.
+    target_deg = CAMERA_CENTER - (target_normalized * CAMERA_SERVO_MAX_ANGLE)
+    lo = CAMERA_CENTER - CAMERA_SERVO_MAX_ANGLE
+    hi = CAMERA_CENTER + CAMERA_SERVO_MAX_ANGLE
+    target_deg = clamp(target_deg, lo, hi)
 
     diff = target_deg - current_camera_angle
     if abs(diff) > cfg.MAX_CAMERA_STEP:
         diff = cfg.MAX_CAMERA_STEP if diff > 0 else -cfg.MAX_CAMERA_STEP
 
-    current_camera_angle = clamp(current_camera_angle + diff, 0, 180)
+    current_camera_angle = clamp(current_camera_angle + diff, lo, hi)
     servo.set(cfg.SERVO_CAMERA_PAN, int(current_camera_angle))
 
 # ==========================================
@@ -384,8 +389,10 @@ def build_observations():
     else:
         time_since_last_detection = 0.0
 
+    # obs[8] в конвенции сети: +action → +obs (как в Unity). apply_camera
+    # использует target_deg = CENTER - norm*max, значит norm = (CENTER - angle)/max.
     camera_servo_normalized = clamp(
-        (current_camera_angle - 90.0) / max(1.0, CAMERA_SERVO_MAX_ANGLE),
+        (CAMERA_CENTER - current_camera_angle) / max(1.0, CAMERA_SERVO_MAX_ANGLE),
         -1.0, 1.0
     )
 
@@ -400,12 +407,13 @@ def build_observations():
     obs[7] = 1.0 if visible else 0.0
     obs[8] = camera_servo_normalized
     obs[9] = 1.0 if is_holding else 0.0
+    # 10: heading (нет компаса — 0)
     obs[10] = 0.0
-    obs[11] = 0.0
-    obs[12] = 0.0
+    # 11: скорость (грубо из PWM)
     speed = (abs(prev_pwm_left) + abs(prev_pwm_right)) / 2.0 / 100.0 * cfg.MAX_SPEED_M_S
-    obs[13] = speed
-    obs[14] = min(time_since_last_detection, 10.0)
+    obs[11] = speed
+    # 12: время с последней детекции
+    obs[12] = min(time_since_last_detection, 10.0)
 
     sensor_raw_cache = {
         "uz_raw": uz_raw_cm,
@@ -471,6 +479,10 @@ def main():
             gas = clamp(float(actions[0]), -1.0, 1.0)
             steer = clamp(float(actions[1]), -1.0, 1.0)
             cam_target = clamp(float(actions[2]), -1.0, 1.0)
+
+            # (B) Авто-центрирование: мяч не виден → камеру к центру, УЗ смотрит вперёд.
+            if cfg.AUTO_CENTER_CAMERA and not raw.get("yolo_vis"):
+                cam_target = 0.0
 
             _, _, _, ir_g, _, _, _, _ = read_sensors()
             if ir_g > 0.5 and not is_holding:

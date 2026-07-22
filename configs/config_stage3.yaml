@@ -1,0 +1,311 @@
+behaviors:
+  GFSX_Brain:
+    trainer_type: ppo
+    hyperparameters:
+      batch_size: 2048
+      buffer_size: 40960
+      learning_rate: 2.5e-4
+      learning_rate_schedule: linear
+      beta: 0.005
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+    network_settings:
+      normalize: true
+      hidden_units: 256
+      num_layers: 2
+      vis_encode_type: simple
+      memory:
+        sequence_length: 64
+        memory_size: 256
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+    max_steps: 50000000
+    time_horizon: 512
+    summary_freq: 20000
+    checkpoint_interval: 100000
+    keep_checkpoints: 10
+
+
+# ==========================================================
+# STAGE 3: больше препятствий
+#   Lesson 1: 4 точки мяча, 3 препятствия
+#   Lesson 2: 6 точек мяча, 4 препятствия
+#   Lesson 3: 9 точек мяча, 3 препятствия
+#
+#   mlagents-learn config_stage3.yaml --run-id=stage3 --initialize-from=stage2
+# ==========================================================
+
+environment_parameters:
+  obstacle_count:
+    curriculum:
+      - name: lesson1
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 3
+      - name: lesson2
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 4
+      - name: lesson3
+        value: 3
+
+  vision_noise:
+    curriculum:
+      - name: lesson1
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0.02
+      - name: lesson2
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0.03
+      - name: lesson3
+        value: 0.04
+
+  ultrasonic_noise:
+    curriculum:
+      - name: lesson1
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0.03
+      - name: lesson2
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0.05
+      - name: lesson3
+        value: 0.06
+
+  sensor_latency:
+    curriculum:
+      - name: lesson1
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 2
+      - name: lesson2
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 3
+      - name: lesson3
+        value: 3
+
+  action_latency:
+    curriculum:
+      - name: lesson1
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 3
+      - name: lesson2
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 4
+      - name: lesson3
+        value: 5
+
+  # --- Рандомизация ---
+  ball_scale:
+    sampler_type: uniform
+    sampler_parameters:
+      min_value: 0.04
+      max_value: 0.07
+
+  ball_mass:
+    sampler_type: uniform
+    sampler_parameters:
+      min_value: 0.05
+      max_value: 0.2
+
+  # --- Константы (награды/штрафы) ---
+  obstacle_respawn_every:
+    sampler_type: constant
+    sampler_parameters:
+      value: 1
+
+  distance_reward_scale:
+    sampler_type: constant
+    sampler_parameters:
+      value: 1.0
+
+  distance_reward_alpha:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.5
+
+  # Множитель штрафа за отъезд от мяча. 1.0 = симметрично,
+  # 0.3-0.5 = объезд препятствий стоит дёшево (см. RobotBrain.cs).
+  backward_distance_factor:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.4
+
+  close_radius:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.35
+
+  drive_rate_penalty:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.001
+
+  camera_rate_penalty:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.005
+
+  wall_proximity_penalty:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.01
+
+  # Порог УЗ (0..1), с которого стартует градиент штрафа за близость препятствия.
+  # 0.3 при usMaxRange=2м = штраф с 60 см до контакта, форма ∝ (1-uNorm/start)².
+  wall_proximity_start_norm:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.3
+
+  obstacle_collision_penalty:
+    sampler_type: constant
+    sampler_parameters:
+      value: 1.0
+
+  end_episode_on_obstacle_hit:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0
+
+  grab_success_reward:
+    sampler_type: constant
+    sampler_parameters:
+      value: 5.0
+
+  timeout_penalty:
+    sampler_type: constant
+    sampler_parameters:
+      value: 1.0
+
+  out_of_arena_penalty:
+    sampler_type: constant
+    sampler_parameters:
+      value: 2.0
+
+  per_step_penalty:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.0015
+
+  gentle_linear_speed_thresh:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.08
+
+  gentle_angular_speed_thresh:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.15
+
+  gentle_placement_bonus:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.008
+
+  gentle_overspeed_penalty:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.015
+
+  centering_bonus_max:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.012
+
+  centering_streak_cap:
+    sampler_type: constant
+    sampler_parameters:
+      value: 30
+
+  centering_angle_threshold:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.25
+
+  centering_min_movement:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.03
+
+  body_camera_alignment_bonus:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.012
+
+  body_camera_alignment_tolerance_deg:
+    sampler_type: constant
+    sampler_parameters:
+      value: 12.0
+
+  # Макс. угол камеры/УЗ от центра (град). УЗ связан с камерой:
+  # ±20° = камера почти всегда вперёд, мяч центрируется доворотом корпуса.
+  camera_servo_max_angle:
+    sampler_type: constant
+    sampler_parameters:
+      value: 20.0
+
+  # Авто-центрирование камеры когда мяч не виден (1=вкл): УЗ смотрит вперёд.
+  auto_center_camera:
+    sampler_type: constant
+    sampler_parameters:
+      value: 1
+
+  blind_approach_bonus:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.004
+
+  blind_approach_min_forward_speed:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.05
+
+  backward_movement_penalty:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.01
+
+  backward_movement_deadzone:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.01

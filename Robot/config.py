@@ -22,7 +22,7 @@ PWM_CONVERSION_FACTOR = 100.0 / MAX_SPEED_M_S
 
 TURN_K = 0.25
 MAX_LINEAR = 0.25
-EMA_STEER = 0.40
+EMA_STEER = 0.95 # предлагается учить почти без стира 
 
 SERVO_BASE = 1
 SERVO_SHOULDER = 2
@@ -40,7 +40,17 @@ ANGLE_CLAW_OPEN = 30
 ANGLE_CLAW_CLOSE = 70
 SERVO_CAMERA_ANGLE = 100
 
-MAX_CAMERA_STEP = 15
+MAX_CAMERA_STEP = 8
+
+# Макс. угол поворота камеры/УЗ от центра (град). ДОЛЖЕН совпадать с
+# camera_servo_max_angle в конфигах обучения (Unity). УЗ жёстко связан с
+# камерой: при большом угле УЗ не видит препятствия по курсу. ±20° = камера
+# почти всегда вперёд, мяч центрируется доворотом корпуса.
+CAMERA_SERVO_MAX_ANGLE = 20.0
+CAMERA_SERVO_CENTER = 90.0  # механический центр серво (град)
+
+# Авто-центрирование камеры когда мяч не виден: УЗ смотрит вперёд.
+AUTO_CENTER_CAMERA = True
 
 # ==========================================
 # БЕЗОПАСНОСТЬ
