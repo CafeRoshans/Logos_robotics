@@ -70,7 +70,8 @@ public class Controller : MonoBehaviour
             return;
         }
 
-        trackWidth = Vector3.Distance(leftTrackPoint.localPosition, rightTrackPoint.localPosition);
+        // trackWidth = Vector3.Distance(leftTrackPoint.localPosition, rightTrackPoint.localPosition);
+        trackWidth = 0.18f;
         Debug.Log($"Controller: trackWidth = {trackWidth:F3} m (расстояние между точками гусениц).");
         if (trackWidth < 0.01f)
             Debug.LogWarning("Controller: trackWidth почти 0 — проверь позиции leftTrackPoint/rightTrackPoint, повороты будут неадекватными.");
