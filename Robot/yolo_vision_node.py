@@ -3,13 +3,14 @@ import socket
 import json
 import time
 import threading
+import os
 from ultralytics import YOLO
 
 # --- НАСТРОЙКИ ---
 STREAM_URL = "http://192.168.2.155:8080/"
 MODEL_NAME = "YoloModels/best_detect.pt"  # Ваша новая кастомная модель
 CONFIDENCE = 0.20      # Для кастомных моделей часто лучше ставить чуть выше, чем 0.20
-TARGET_CLASSES = [0]    # ID класса мяча в вашей новой модели
+TARGET_CLASSES = os.getenv('TARGET_CLASSES')    # ID класса мяча в вашей новой модели
 
 
 # --- UDP ---
