@@ -1444,7 +1444,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8865409503205789608, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}
       propertyPath: m_BrainParameters.NumStackedVectorObservations
-      value: 5
+      value: 4
       objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 448925899835208303, guid: f87c870fb931f42ea827b2b60007a9ce, type: 3}

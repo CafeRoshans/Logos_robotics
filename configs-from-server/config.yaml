@@ -29,76 +29,133 @@ behaviors:
     keep_checkpoints: 10
 
 
-# ==========================================================
-# STAGE 4: финальная сложность
-#   Lesson 1: 9 точек мяча, 1 препятствие
-#   Lesson 2: 9 точек мяча, 5 препятствий
-#
-#   mlagents-learn config_stage4.yaml --run-id=stage4 --initialize-from=stage3
-# ==========================================================
-
 environment_parameters:
-  obstacle_count:
+
+  # ============================================================
+  # CURRICULUM: параметры с пошаговым усложнением
+  # Этап 1 (easy):    мяч рядом, нет препятствий, нет шума
+  # Этап 2 (medium):  3 точки мяча, 1 препятствие, лёгкий шум
+  # Этап 3 (full):    все точки, 2 препятствия, полный шум
+  # ============================================================
+
+  ball_spawn_count:
     curriculum:
-      - name: lesson1
+      - name: easy
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
+          min_lesson_length: 100
+          threshold: 3.0
         value: 1
-      - name: lesson2
-        value: 5
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 3
+      - name: full
+        value: -1
+
+  obstacle_count:
+    curriculum:
+      - name: easy
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 1
+      - name: full
+        value: 2
 
   vision_noise:
     curriculum:
-      - name: lesson1
+      - name: easy
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
-        value: 0.03
-      - name: lesson2
-        value: 0.05
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0.0
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 0.02
+      - name: full
+        value: 0.04
 
   ultrasonic_noise:
     curriculum:
-      - name: lesson1
+      - name: easy
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
-        value: 0.05
-      - name: lesson2
-        value: 0.08
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0.0
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 0.03
+      - name: full
+        value: 0.06
 
   sensor_latency:
     curriculum:
-      - name: lesson1
+      - name: easy
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 0
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
+        value: 2
+      - name: full
         value: 3
-      - name: lesson2
-        value: 4
 
   action_latency:
     curriculum:
-      - name: lesson1
+      - name: easy
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
+          min_lesson_length: 100
+          threshold: 3.0
+        value: 2
+      - name: medium
+        completion_criteria:
+          measure: reward
+          behavior: GFSX_Brain
+          min_lesson_length: 100
+          threshold: 2.5
         value: 4
-      - name: lesson2
+      - name: full
         value: 5
 
-  # --- Рандомизация ---
+  # ============================================================
+  # РАНДОМИЗАЦИЯ: sampler-параметры (с первого шага)
+  # ============================================================
+
   ball_scale:
     sampler_type: uniform
     sampler_parameters:
@@ -111,18 +168,10 @@ environment_parameters:
       min_value: 0.05
       max_value: 0.2
 
-  # Макс. скорость робота (м/с) — доменная рандомизация. Реальный GFS-X ~0.25 м/с,
-  # держим близко к реалу иначе сенсоры не успевают предупредить при высокой скорости.
-  robot_max_speed_min:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.20
-  robot_max_speed_max:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.30
+  # ============================================================
+  # КОНСТАНТЫ: награды и штрафы (не меняются по curriculum)
+  # ============================================================
 
-  # --- Константы (награды/штрафы) ---
   obstacle_respawn_every:
     sampler_type: constant
     sampler_parameters:
@@ -136,14 +185,7 @@ environment_parameters:
   distance_reward_alpha:
     sampler_type: constant
     sampler_parameters:
-      value: 0.5
-
-  # Множитель штрафа за отъезд от мяча. 1.0 = симметрично,
-  # 0.3-0.5 = объезд препятствий стоит дёшево (см. RobotBrain.cs).
-  backward_distance_factor:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.4
+      value: 2.0
 
   close_radius:
     sampler_type: constant
@@ -165,13 +207,6 @@ environment_parameters:
     sampler_parameters:
       value: 0.01
 
-  # Порог УЗ (0..1), с которого стартует градиент штрафа за близость препятствия.
-  # 0.3 при usMaxRange=2м = штраф с 60 см до контакта, форма ∝ (1-uNorm/start)².
-  wall_proximity_start_norm:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.3
-
   obstacle_collision_penalty:
     sampler_type: constant
     sampler_parameters:
@@ -180,7 +215,7 @@ environment_parameters:
   end_episode_on_obstacle_hit:
     sampler_type: constant
     sampler_parameters:
-      value: 1
+      value: 0
 
   grab_success_reward:
     sampler_type: constant
@@ -245,25 +280,12 @@ environment_parameters:
   body_camera_alignment_bonus:
     sampler_type: constant
     sampler_parameters:
-      value: 0.012
+      value: 0.007
 
   body_camera_alignment_tolerance_deg:
     sampler_type: constant
     sampler_parameters:
-      value: 12.0
-
-  # Макс. угол камеры/УЗ от центра (град). УЗ связан с камерой:
-  # ±20° = камера почти всегда вперёд, мяч центрируется доворотом корпуса.
-  camera_servo_max_angle:
-    sampler_type: constant
-    sampler_parameters:
-      value: 20.0
-
-  # Авто-центрирование камеры когда мяч не виден (1=вкл): УЗ смотрит вперёд.
-  auto_center_camera:
-    sampler_type: constant
-    sampler_parameters:
-      value: 1
+      value: 5.0
 
   blind_approach_bonus:
     sampler_type: constant

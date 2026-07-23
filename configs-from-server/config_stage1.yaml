@@ -30,73 +30,35 @@ behaviors:
 
 
 # ==========================================================
-# STAGE 4: финальная сложность
-#   Lesson 1: 9 точек мяча, 1 препятствие
-#   Lesson 2: 9 точек мяча, 5 препятствий
-#
-#   mlagents-learn config_stage4.yaml --run-id=stage4 --initialize-from=stage3
+# STAGE 1: без препятствий, мяч в случайных точках
+#   mlagents-learn config_stage1.yaml --run-id=stage1
 # ==========================================================
 
 environment_parameters:
   obstacle_count:
-    curriculum:
-      - name: lesson1
-        completion_criteria:
-          measure: reward
-          behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
-        value: 1
-      - name: lesson2
-        value: 5
+    sampler_type: constant
+    sampler_parameters:
+      value: 1
 
   vision_noise:
-    curriculum:
-      - name: lesson1
-        completion_criteria:
-          measure: reward
-          behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
-        value: 0.03
-      - name: lesson2
-        value: 0.05
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.0
 
   ultrasonic_noise:
-    curriculum:
-      - name: lesson1
-        completion_criteria:
-          measure: reward
-          behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
-        value: 0.05
-      - name: lesson2
-        value: 0.08
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.0
 
   sensor_latency:
-    curriculum:
-      - name: lesson1
-        completion_criteria:
-          measure: reward
-          behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
-        value: 3
-      - name: lesson2
-        value: 4
+    sampler_type: constant
+    sampler_parameters:
+      value: 0
 
   action_latency:
-    curriculum:
-      - name: lesson1
-        completion_criteria:
-          measure: reward
-          behavior: GFSX_Brain
-          min_lesson_length: 1000
-          threshold: 10
-        value: 4
-      - name: lesson2
-        value: 5
+    sampler_type: constant
+    sampler_parameters:
+      value: 2
 
   # --- Рандомизация ---
   ball_scale:
@@ -110,17 +72,6 @@ environment_parameters:
     sampler_parameters:
       min_value: 0.05
       max_value: 0.2
-
-  # Макс. скорость робота (м/с) — доменная рандомизация. Реальный GFS-X ~0.25 м/с,
-  # держим близко к реалу иначе сенсоры не успевают предупредить при высокой скорости.
-  robot_max_speed_min:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.20
-  robot_max_speed_max:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.30
 
   # --- Константы (награды/штрафы) ---
   obstacle_respawn_every:
@@ -164,13 +115,6 @@ environment_parameters:
     sampler_type: constant
     sampler_parameters:
       value: 0.01
-
-  # Порог УЗ (0..1), с которого стартует градиент штрафа за близость препятствия.
-  # 0.3 при usMaxRange=2м = штраф с 60 см до контакта, форма ∝ (1-uNorm/start)².
-  wall_proximity_start_norm:
-    sampler_type: constant
-    sampler_parameters:
-      value: 0.3
 
   obstacle_collision_penalty:
     sampler_type: constant

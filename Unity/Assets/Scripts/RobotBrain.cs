@@ -242,9 +242,11 @@ public class RobotBrain : Agent
     [Range(0f, 0.10f)]
     public float motorPerSideJitter = 0.02f;
     [Tooltip("Разброс максимальной скорости робота (maxLinearCmd), м/сек. " +
-             "0.6..1.0 = более-менее сильный/слабый АКБ или трение.")]
-    public float robotMaxSpeedMin = 0.6f;
-    public float robotMaxSpeedMax = 1.0f;
+             "Реальный GFS-X ~0.25 м/с. При обучении удерживаем близко к реалу, чтобы " +
+             "sim-to-real не ломался (сенсоры видят препятствие вовремя относительно скорости). " +
+             "Читается из env: robot_max_speed_min / robot_max_speed_max.")]
+    public float robotMaxSpeedMin = 0.20f;
+    public float robotMaxSpeedMax = 0.30f;
     [Tooltip("Разброс сглаживания разгона PWM. Больше — медленнее реакция мотора.")]
     public float motorPwmStepMin = 10f;
     public float motorPwmStepMax = 20f;
@@ -1188,6 +1190,18 @@ public class RobotBrain : Agent
         {
             float v = env.GetWithDefault("backward_movement_deadzone", -1f);
             if (v >= 0f) backwardMovementDeadzone = v;
+        }
+
+        // ── Максимальная скорость робота (доменная рандомизация) ─────────────
+        // Реальный GFS-X ~0.25 м/с. При обучении удерживаем близко к реалу,
+        // иначе сенсоры (УЗ 2м, ИК 15см) не успевают предупредить при большей скорости.
+        {
+            float v = env.GetWithDefault("robot_max_speed_min", -1f);
+            if (v > 0f) robotMaxSpeedMin = v;
+        }
+        {
+            float v = env.GetWithDefault("robot_max_speed_max", -1f);
+            if (v > 0f) robotMaxSpeedMax = v;
         }
     }
 

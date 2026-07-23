@@ -45,15 +45,15 @@ environment_parameters:
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1000
+          threshold: 9.0
         value: 3
       - name: lesson2
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1500
+          threshold: 8.5
         value: 4
       - name: lesson3
         value: 3
@@ -64,15 +64,15 @@ environment_parameters:
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1000
+          threshold: 9.0
         value: 0.02
       - name: lesson2
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1500
+          threshold: 8.5
         value: 0.03
       - name: lesson3
         value: 0.04
@@ -83,15 +83,15 @@ environment_parameters:
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1000
+          threshold: 9.0
         value: 0.03
       - name: lesson2
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1500
+          threshold: 8.5
         value: 0.05
       - name: lesson3
         value: 0.06
@@ -102,15 +102,15 @@ environment_parameters:
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1000
+          threshold: 9.0
         value: 2
       - name: lesson2
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1500
+          threshold: 8.5
         value: 3
       - name: lesson3
         value: 3
@@ -121,15 +121,15 @@ environment_parameters:
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1000
+          threshold: 9.0
         value: 3
       - name: lesson2
         completion_criteria:
           measure: reward
           behavior: GFSX_Brain
-          min_lesson_length: 100
-          threshold: 3.0
+          min_lesson_length: 1500
+          threshold: 8.5
         value: 4
       - name: lesson3
         value: 5
@@ -146,6 +146,17 @@ environment_parameters:
     sampler_parameters:
       min_value: 0.05
       max_value: 0.2
+
+  # Макс. скорость робота (м/с) — доменная рандомизация. Реальный GFS-X ~0.25 м/с,
+  # держим близко к реалу иначе сенсоры не успевают предупредить при высокой скорости.
+  robot_max_speed_min:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.20
+  robot_max_speed_max:
+    sampler_type: constant
+    sampler_parameters:
+      value: 0.30
 
   # --- Константы (награды/штрафы) ---
   obstacle_respawn_every:
@@ -205,7 +216,7 @@ environment_parameters:
   end_episode_on_obstacle_hit:
     sampler_type: constant
     sampler_parameters:
-      value: 0
+      value: 1
 
   grab_success_reward:
     sampler_type: constant
