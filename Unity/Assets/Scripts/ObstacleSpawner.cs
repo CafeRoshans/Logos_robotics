@@ -28,6 +28,14 @@ public class ObstacleSpawner : MonoBehaviour
     [Tooltip("Родитель для заспавненных препятствий. Если null — эта же арена (transform).")]
     public Transform spawnParent;
 
+    [Tooltip("Случайный поворот препятствия вокруг Y при спавне. При включении на каждом " +
+             "эпизоде препятствие получает поворот 0/45/90° (равновероятно) — добавляет " +
+             "разнообразие ориентаций для доменной рандомизации.")]
+    public bool randomizeYawOnSpawn = true;
+
+    [Tooltip("Список углов (град) для случайного Y-поворота. Пример: 0,45,90.")]
+    public float[] spawnYawChoices = new float[] { 0f, 45f, 90f };
+
     private readonly List<GameObject> _current = new List<GameObject>();
 
     /// <summary>
@@ -83,7 +91,13 @@ public class ObstacleSpawner : MonoBehaviour
             // такие, как в префабе. Раньше компенсировали scale формулой,
             // но при экстремальных значениях (< 0.001 или отрицательных)
             // это давало бесконечные scale и NaN в физике.
-            var obj = Instantiate(obstaclePrefab, p, pt.rotation);
+            Quaternion rot = pt.rotation;
+            if (randomizeYawOnSpawn && spawnYawChoices != null && spawnYawChoices.Length > 0)
+            {
+                float yaw = spawnYawChoices[Random.Range(0, spawnYawChoices.Length)];
+                rot *= Quaternion.Euler(0f, yaw, 0f);
+            }
+            var obj = Instantiate(obstaclePrefab, p, rot);
             _current.Add(obj);
         }
 

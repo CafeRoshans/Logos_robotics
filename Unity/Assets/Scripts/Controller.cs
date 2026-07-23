@@ -74,7 +74,11 @@ public class Controller : MonoBehaviour
             return;
         }
 
-        trackWidth = Vector3.Distance(leftTrackPoint.localPosition, rightTrackPoint.localPosition);
+        // trackWidth = Vector3.Distance(leftTrackPoint.localPosition, rightTrackPoint.localPosition);
+        // Захардкожено в реально измеренное значение реального GFS-X (было: авто-расчёт по
+        // трансформам сцены, из ветки feat/making-rl-work — "теперь мы знаем как будет
+        // происходить в реальности"). Старая строка оставлена закомментированной для сравнения.
+        trackWidth = 0.18f;
         Debug.Log($"Controller: trackWidth = {trackWidth:F3} m (расстояние между точками гусениц).");
         if (trackWidth < 0.01f)
             Debug.LogWarning("Controller: trackWidth почти 0 — проверь позиции leftTrackPoint/rightTrackPoint, повороты будут неадекватными.");

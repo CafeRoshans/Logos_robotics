@@ -103,6 +103,14 @@ public class CameraAimController : MonoBehaviour
              "при поиске точность не нужна, важна скорость обзора всего диапазона.")]
     [Range(0.5f, 15f)]
     public float searchStepDeg = 4f;
+    [Tooltip("±диапазон ПОИСКА по повороту (yaw), градусы — УЖЕ, чем полный maxAngleDeg " +
+             "(реальный физический предел камеры, 30°). УЗ-датчик механически привязан к yaw " +
+             "(см. VirtualSensors.centerPoint), поэтому чем дольше камера ищет мяч далеко от " +
+             "вперёд, тем дольше УЗ не смотрит по курсу движения. Узкий диапазон поиска держит " +
+             "камеру ближе к вперёд большую часть времени, не отнимая у СЛЕЖЕНИЯ полный физический " +
+             "диапазон — если мяч реально нашёлся сбоку, слежение всё равно довернёт до maxAngleDeg.")]
+    [Range(1f, 45f)]
+    public float searchYawMaxDeg = 15f;
     [Tooltip("Шаг НАКЛОНА во время поиска (зигзаг вверх-вниз), градусы. Диапазон поиска " +
              "по наклону (searchTiltMinDeg..searchTiltMaxDeg) узкий, поэтому шаг небольшой — " +
              "зигзаг должен успевать несколько раз качнуться, пока идёт один проход по yaw.")]
@@ -253,9 +261,12 @@ public class CameraAimController : MonoBehaviour
             if (_timeSinceStep < searchStepIntervalSeconds) return;
             _timeSinceStep = 0f;
 
-            // --- Поворот: качели с паузой на краях ---
-            bool atExtreme = (_searchDir > 0 && CurrentAngleDeg >= maxAngleDeg - 0.01f)
-                           || (_searchDir < 0 && CurrentAngleDeg <= -maxAngleDeg + 0.01f);
+            // --- Поворот: качели с паузой на краях. Поиск использует УЗКИЙ searchYawMaxDeg,
+            // а не полный физический maxAngleDeg — держит камеру (и жёстко привязанный к её
+            // yaw УЗ-датчик) ближе к вперёд большую часть времени поиска. Слежение за уже
+            // НАЙДЕННЫМ мячом (ветка выше) по-прежнему пользуется полным maxAngleDeg. ---
+            bool atExtreme = (_searchDir > 0 && CurrentAngleDeg >= searchYawMaxDeg - 0.01f)
+                           || (_searchDir < 0 && CurrentAngleDeg <= -searchYawMaxDeg + 0.01f);
             if (atExtreme)
             {
                 _searchPauseTimer += searchStepIntervalSeconds;
@@ -267,7 +278,7 @@ public class CameraAimController : MonoBehaviour
             }
             else
             {
-                ApplyYawStep(_searchDir, searchStepDeg);
+                ApplyYawStep(_searchDir, searchStepDeg, -searchYawMaxDeg, searchYawMaxDeg);
             }
 
             // --- Наклон: непрерывный зигзаг между searchTiltMinDeg/MaxDeg, БЕЗ паузы —
@@ -296,8 +307,13 @@ public class CameraAimController : MonoBehaviour
 
     void ApplyYawStep(float direction, float stepSizeDeg)
     {
+        ApplyYawStep(direction, stepSizeDeg, -maxAngleDeg, maxAngleDeg);
+    }
+
+    void ApplyYawStep(float direction, float stepSizeDeg, float clampMin, float clampMax)
+    {
         if (direction == 0f) return;
-        CurrentAngleDeg = Mathf.Clamp(CurrentAngleDeg + Mathf.Sign(direction) * stepSizeDeg, -maxAngleDeg, maxAngleDeg);
+        CurrentAngleDeg = Mathf.Clamp(CurrentAngleDeg + Mathf.Sign(direction) * stepSizeDeg, clampMin, clampMax);
         ApplyRotation();
     }
 

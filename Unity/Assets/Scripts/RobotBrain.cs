@@ -43,11 +43,9 @@ public class RobotBrain : Agent
     public SimulatedYoloCamera simCam;
     [Tooltip("UDP-приёмник от реальной YOLO — используется ТОЛЬКО когда useRealRobot=true.")]
     public RealVision yolo;
-    [Tooltip("Transform, вокруг Y которого крутится камера (сервопривод). Может быть родителем самой камеры.")]
-    public Transform cameraServo;
     [Tooltip("Автономный контроллер камеры (PID + поиск). Сеть камерой больше не управляет — " +
-             "см. комментарий к классу выше. Должен быть на этом же объекте или дочернем, " +
-             "с cameraAim.cameraServo, указывающим на тот же Transform, что и поле выше.")]
+             "см. комментарий к классу выше. Ссылка на сервопривод (Transform) задаётся " +
+             "внутри самого cameraAim.cameraServo, отдельного дубля здесь больше нет.")]
     public CameraAimController cameraAim;
     [Tooltip("Мяч, за которым робот охотится")]
     public Transform targetBall;
@@ -66,8 +64,8 @@ public class RobotBrain : Agent
              "дублируется в cameraAim.maxAngleDeg автоматически в Initialize(), чтобы наблюдение " +
              "сети (нормировка по этому значению) и реальный физический предел камеры не разъезжались. " +
              "Не меняй cameraAim.maxAngleDeg отдельно в инспекторе — перезапишется отсюда. " +
-             "Реальная камера GFS-X: <45° в каждую сторону — подставь точное значение своего робота.")]
-    public float cameraServoMaxAngle = 45f;
+             "Реальная камера GFS-X: 30° в каждую сторону (подтверждено, 2026-07-22).")]
+    public float cameraServoMaxAngle = 30f;
 
     [Header("Границы арены (терминал 'вылетел')")]
     [Tooltip("Смещение центра арены ОТ стартовой позиции робота, в локальных единицах. " +
@@ -83,6 +81,14 @@ public class RobotBrain : Agent
     public float distanceRewardScale = 1.0f;
     [Tooltip("Коэф. α в exp(α×(1-dist)): α=2 → ×7.4 у мяча, ×1.0 на 1м. Усиливает сигнал у цели без сингулярности.")]
     public float distanceRewardAlpha = 2f;
+    [Tooltip("Множитель штрафа за ОТЪЕЗД от мяча (delta<0), из feat/making-rl-work. 1.0 = симметрично, " +
+             "0.3-0.5 = объезд препятствий стоит дёшево, а прогресс к мячу ценится полностью. Убирает " +
+             "залипание 'кружить по прямой видимости, лишь бы не отъезжать'. БЫЛО нейтральным (1.0 — " +
+             "не делало вообще ничего) — включено реально: отъезд теперь вполовину дешевле прогресса, " +
+             "не наказывается как полноценный регресс. backwardMovementPenalty ниже — отдельный " +
+             "механизм (штрафует локальную заднюю скорость корпуса, а не дистанцию до мяча), не дублирует.")]
+    [Range(0f, 1f)]
+    public float backwardDistanceFactor = 0.5f;
     [Tooltip("Радиус переключения Phase1→Phase2 (м). Дальше — delta-reward за сближение. Ближе — slow-approach.")]
     public float closeRadius = 0.35f;
     [Tooltip("Штраф за резкое изменение gas/steer между шагами. Сглаживает езду.")]
@@ -98,8 +104,10 @@ public class RobotBrain : Agent
              "на порядок больше).")]
     public float wallProximityPenalty   = 0.01f;
 
-    [Tooltip("Штраф за окончание эпизода по таймауту")]
-    public float timeoutPenalty = 1.0f;
+    [Tooltip("Штраф за окончание эпизода по таймауту. Поднят 1.0 → 2.0 (2026-07-22) — вместе с " +
+             "потолками на blindApproachBonus/gentlePlacementBonus ниже это гарантирует, что даже " +
+             "эпизод, где робот везде побродил и ничего не поймал, не выйдет в жирный плюс.")]
+    public float timeoutPenalty = 2.0f;
 
     [Header("Столкновение с препятствием / стеной")]
     [Tooltip("Тег, который должен быть выставлен на prefab препятствия в Unity Editor. " +
@@ -128,8 +136,12 @@ public class RobotBrain : Agent
              "обрывает эпизод, даже если столкновения с препятствиями штрафуются мягче.")]
     public bool   endEpisodeOnWallHit      = true;
 
-    [Tooltip("Терминальный бонус за успешный захват своего мяча.")]
-    public float grabSuccessReward      = 8.0f;
+    [Tooltip("Терминальный бонус за успешный захват своего мяча. Поднят до 10 (2026-07-22) — " +
+             "должен ощутимо ПРЕВОСХОДИТЬ сумму всего шейпинга за неудачный эпизод (теперь с " +
+             "потолками на blindApproachBonus/gentlePlacementBonus это разумно ограниченная сумма, " +
+             "а не растущая с длиной эпизода без предела), чтобы успех был явно самой сильной " +
+             "наградой, а не одной из многих.")]
+    public float grabSuccessReward      = 10.0f;
 
 
     [Header("Blind approach — движение вперёд когда мяч НЕ виден")]
@@ -139,8 +151,14 @@ public class RobotBrain : Agent
              "на месте при потере мяча. БЫЛО слишком маленьким (0.003) и считалось только по " +
              "чисто прямой скорости — сеть находила, что дешевле и безопаснее подождать, пока " +
              "автономный поиск камеры (CameraAimController) сам наткнётся на мяч, чем рисковать " +
-             "слепым проездом почти без выигрыша в награде.")]
-    public float blindApproachBonus = 0.015f;
+             "слепым проездом почти без выигрыша в награде. НАЙДЕН БАГ (2026-07-22, по факту: " +
+             "reward ~34 при SuccessRate=0 на самом старте обучения): условие 'мяч НЕ виден + " +
+             "скорость > порога' почти всегда истинно для случайной политики (мяч ещё не умеет " +
+             "искать → почти всегда не виден; шум в действиях почти всегда даёт скорость выше " +
+             "0.05 м/с) — 0.015 × 3500 шагов = потолок 52.5 БЕЗ единого намёка на успех. Снижено " +
+             "до 0.005 + добавлен потолок за эпизод (blindApproachEpisodeCap), чтобы длина " +
+             "эпизода перестала быть рычагом для раздувания награды.")]
+    public float blindApproachBonus = 0.005f;
     [Tooltip("Минимальная реальная скорость (м/с, по модулю смещения — не только вперёд) для " +
              "срабатывания blindApproachBonus / searchIdlePenalty ниже.")]
     public float blindApproachMinForwardSpeed = 0.05f;
@@ -148,6 +166,10 @@ public class RobotBrain : Agent
              "blindApproachMinForwardSpeed) — то есть просто стоит или крутится вокруг своей " +
              "оси без реального перемещения по арене. Явно отучает от пассивного ожидания.")]
     public float searchIdlePenalty = 0.004f;
+    [Tooltip("Максимальная СУММА blindApproachBonus за весь эпизод — плоская награда за шаг " +
+             "иначе умножается на длину эпизода (MaxStep=3500) без предела. Штраф searchIdlePenalty " +
+             "потолком НЕ ограничен — пассивность всегда должна оставаться невыгодной.")]
+    public float blindApproachEpisodeCap = 3.0f;
 
     [Header("Шум наблюдений (доменная рандомизация)")]
     [Tooltip("Амплитуда uniform-шума на УЗ (±). Значение читается из yaml, если useYamlEnvParams=true.")]
@@ -164,7 +186,7 @@ public class RobotBrain : Agent
 
     [Header("Yaml environment_parameters")]
     [Tooltip("Читать ball_mass, ball_scale, vision_noise, ultrasonic_noise, sensor_latency, action_latency, " +
-             "obstacle_count, ball_spawn_count, obstacle_respawn_every из config.yaml → environment_parameters. " +
+             "obstacle_count, obstacle_respawn_every из config.yaml → environment_parameters. " +
              "Позволяет менять физику/обстановку без пересборки билда + поддерживает curriculum (усложнение). " +
              "НЕ включает награды/штрафы — те по прямому запросу больше НЕ читаются из yaml вообще, только " +
              "из инспектора/prefab (см. конец ReadYamlEnvParams()).")]
@@ -190,6 +212,11 @@ public class RobotBrain : Agent
     public float gentlePlacementBonus = 0.008f;
     [Tooltip("Штраф каждый шаг в Phase2, когда скорость превышает порог (пролёт мимо).")]
     public float gentleOverspeedPenalty = 0.015f;
+    [Tooltip("Максимальная СУММА gentlePlacementBonus за весь эпизод — без потолка робот мог бы " +
+             "выучить стоять чуть внутри closeRadius (ближе 0.35м, но дальше реального радиуса " +
+             "захвата клешни ~0.06-0.1м) и копить награду сколько угодно долго, ни разу не схватив " +
+             "мяч. gentleOverspeedPenalty потолком НЕ ограничен.")]
+    public float gentlePlacementEpisodeCap = 3.0f;
 
     [Header("Штраф за движение назад")]
     [Tooltip("Штраф за движение назад (когда корпус реально смещается против transform.forward)")]
@@ -235,8 +262,6 @@ public class RobotBrain : Agent
              "нужен Discrete Branches = 1. Поле вызывалось в OnActionReceived, но нигде не было " +
              "объявлено (CS0103) — видимо, потерялось при переносе клешни на автоматический режим.")]
     public bool useAutomaticGripper = true;
-    [Tooltip("Порог ИК клешни, выше которого считаем, что мяч действительно рядом")]
-    public float grabProximityIRThreshold = 0.5f;
 
     [Header("Случайный спавн робота и мяча")]
     [Tooltip("Спавнить робота в случайной точке из obstacleSpawner.unusedPoints при каждом эпизоде")]
@@ -255,19 +280,19 @@ public class RobotBrain : Agent
              "randomizeRobotHeading=true.")]
     public float headingJitterDeg = 30f;
 
-    [Header("Спавн мяча — фиксированные точки")]
-    [Tooltip("Массив точек-кандидатов для мяча (например, середины 4 бортиков арены). " +
-             "На каждом эпизоде случайно выбирается ОДНА. Если массив пуст — берётся точка " +
-             "из obstacleSpawner.unusedPoints (старое поведение). Приоритетнее чем unusedPoints.")]
-    public Transform[] ballSpawnPoints;
-
     [Header("Спавн точки робота")]
     [Tooltip("Массив точек кандидатов чтобы поставить робота")]
     public Transform[] robotSpawnPoints;
 
-    [Tooltip("Сколько первых точек из ballSpawnPoints использовать. -1 = все. " +
-             "Читается из yaml (ball_spawn_count) для curriculum: сначала 1 фикс. точка, потом все 9.")]
-    public int ballSpawnCount = -1;
+    [Header("Спавн мяча — зона (из feat/making-rl-work)")]
+    [Tooltip("Центр зоны спавна мяча. Если null — центр арены (_startPosition + arenaCenterOffset). " +
+             "БЫЛО: 9 фиксированных точек (ballSpawnPoints) + ballSpawnCount для curriculum — узкое, " +
+             "легко переобучаемое распределение (см. обсуждение переобучения на статичную раскладку). " +
+             "Заменено на непрерывный сэмплинг внутри прямоугольной зоны.")]
+    public Transform ballSpawnZoneCenter;
+    [Tooltip("Половина размера зоны спавна по X/Z (м). Зону задаёшь сам в инспекторе — она должна " +
+             "быть свободна от препятствий (reject-sampling НЕ используется).")]
+    public Vector2 ballSpawnZoneHalfExtents = new Vector2(1.5f, 1.5f);
 
     [Header("Рандомизация массы мяча")]
     [Tooltip("На каждом эпизоде мяч получает случайную массу (Gaussian вокруг номинала). " +
@@ -352,13 +377,9 @@ public class RobotBrain : Agent
     private Quaternion _startRotation;
     private Vector3 _ballStartPosition;
 
-    private float _cameraServoAngle = 0f;
     private float _prevDistanceToBall = -1f;
     private float _prevGas = 0f;
     private float _prevSteer = 0f;
-    private float _prevCam = 0f;
-    private float _currentCameraYaw = 0f;  // -1..1, абсолютное состояние камеры с rate-limit
-    private float _smoothedCamTarget = 0f;  // EMA-сглаженный target от сети — глушит шум
     private float _lastObstacleHitTime = -999f; // время последнего штрафа за столкновение (cooldown)
     private float _timeSinceLastDetection = 0f;
     private float _lastKnownBallDirection = 0f;
@@ -389,6 +410,8 @@ public class RobotBrain : Agent
     private int   _framesBallVisible = 0;
     private int   _framesTotal       = 0;
     private float _speedAccum        = 0f;
+    private float _blindApproachRewardThisEpisode   = 0f; // потолок на blindApproachBonus за эпизод
+    private float _gentlePlacementRewardThisEpisode = 0f; // потолок на gentlePlacementBonus за эпизод
 
     // --- Welford online std между эпизодами (сбрасывается в Initialize, не OnEpisodeBegin) ---
     // Для каждого компонента хранятся mean и M2; std = sqrt(M2 / (n-1))
@@ -540,41 +563,10 @@ public class RobotBrain : Agent
             }
         }
 
-        // --- Позиция мяча: случайная из ballSpawnPoints ---
-        if (ballSpawnPoints != null && ballSpawnPoints.Length > 0)
-        {
-            // ball_spawn_count ограничивает сколько первых точек активно (curriculum).
-            // -1 или 0 = все точки; иначе берём первые N.
-            int limit = (ballSpawnCount > 0) ? Mathf.Min(ballSpawnCount, ballSpawnPoints.Length)
-                                             : ballSpawnPoints.Length;
-
-            // Собираем валидные точки среди первых `limit` (не null, не NaN-позиция)
-            int validCount = 0;
-            for (int i = 0; i < limit; i++)
-                if (ballSpawnPoints[i] != null && IsValid(ballSpawnPoints[i].position))
-                    validCount++;
-
-            if (validCount > 0)
-            {
-                // Выбираем случайную по индексу среди валидных
-                int pick = Random.Range(0, validCount);
-                int idx = 0;
-                for (int i = 0; i < limit; i++)
-                {
-                    if (ballSpawnPoints[i] == null || !IsValid(ballSpawnPoints[i].position)) continue;
-                    if (idx == pick) { ballPos = ballSpawnPoints[i].position; break; }
-                    idx++;
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"[{name}] ballSpawnPoints не содержит валидных точек (limit={limit}), использую _ballStartPosition.");
-            }
-
-            // DEPRECATED
-            // Если мяч оказался слишком близко к роботу (робот заспавнился рядом
-            // с выбранным бортиком), отодвигаем робота в другую свободную точку.
-        }
+        // --- Позиция мяча: случайная точка в прямоугольной зоне спавна ---
+        // Зона выделена вручную в инспекторе и заведомо свободна от препятствий —
+        // reject-sampling нужен только по дистанции до робота (minRobotBallDistance).
+        ballPos = SampleBallInZone(robotPos);
 
         // Финальная проверка — если что-то дало NaN, используем безопасные значения
         if (!IsValid(robotPos)) robotPos = _startPosition;
@@ -595,7 +587,13 @@ public class RobotBrain : Agent
             // то есть ~половина эпизодов давала отрицательную "массу", которая клампилась
             // в 0.001 кг (робот-пушинка). Теперь среднее и разброс — явные отдельные поля.
             float robotMass = robotMassMean + Gaussian(robotMassStddev);
-            _rb.mass = Mathf.Max(0.001f, robotMass);
+            // Clamp (не только Max) — вторая линия обороны сверху. Max защищает только от
+            // нуля/отрицательных, но пропускает +Infinity/NaN насквозь (см. фикс Gaussian() —
+            // именно так уронило обучение на шаге ~1M). 8×stddev — статистически недостижимо
+            // для честного гауссова разброса (~2e-15), срабатывает только на поломанных значениях.
+            _rb.mass = IsValid(new Vector3(robotMass, 0, 0))
+                ? Mathf.Clamp(robotMass, 0.001f, robotMassMean + robotMassStddev * 8f)
+                : robotMassMean;
         }
 
         if (tracks != null) tracks.Move(0f, 0f);
@@ -617,7 +615,10 @@ public class RobotBrain : Agent
                 {
                     // БЫЛО: Gaussian(0.1f) — тот же баг нулевого среднего, что и у робота.
                     float m = ballMassMean + Gaussian(ballMassStddev);
-                    brb.mass = Mathf.Max(0.001f, m); // страховка от нуля/отрицательного
+                    // Clamp (не только Max) — см. подробный комментарий у robotMass выше.
+                    brb.mass = IsValid(new Vector3(m, 0, 0))
+                        ? Mathf.Clamp(m, 0.001f, ballMassMean + ballMassStddev * 8f)
+                        : ballMassMean;
                 }
             }
         }
@@ -683,6 +684,8 @@ public class RobotBrain : Agent
         _framesBallVisible = 0;
         _framesTotal = 0;
         _speedAccum = 0f;
+        _blindApproachRewardThisEpisode = 0f;
+        _gentlePlacementRewardThisEpisode = 0f;
 
         // Burst dropout сбрасываем на начало эпизода
         _dropoutStepsLeft = 0;
@@ -701,7 +704,15 @@ public class RobotBrain : Agent
 
     static float Gaussian(float stddev)
     {
-        float u1 = 1f - Random.value;
+        // БЫЛО причиной краха обучения на шаге ~1M ("observations had NaN values"): Random.value
+        // в Unity включает ОБА конца диапазона [0..1], значит u1 = 1f - Random.value мог оказаться
+        // РОВНО 0 (когда Random.value выпадал ровно 1.0). Mathf.Log(0) = -Infinity, дальше
+        // Sqrt(-2 * -Infinity) = Sqrt(+Infinity) = +Infinity — не NaN, но так же смертельно:
+        // при рандомизации массы (robotMass/ballMass) это давало _rb.mass = Infinity, что
+        // проходило мимо Mathf.Max(0.001f, ...) (защищает только снизу) и рушило физику PhysX,
+        // откуда NaN и просачивался дальше в позицию/скорость/наблюдения. Редкий edge case, но
+        // за миллион шагов и сотни рандомизаций массы — статистически ожидаемо, что и сработало.
+        float u1 = Mathf.Max(1e-7f, 1f - Random.value);
         float u2 = 1f - Random.value;
         float z = Mathf.Sqrt(-2f * Mathf.Log(u1)) * Mathf.Cos(2f * Mathf.PI * u2);
         return z * stddev;
@@ -951,9 +962,29 @@ public class RobotBrain : Agent
         //    Phase 2 (dist < closeRadius): delta-reward отключён — работает slow-placement (ниже).
         float curDist = DistanceToBall();
         float forwardSpeed = Vector3.Dot(_lastVelocity, transform.forward);
+        // distDelta считаем ДО перезаписи _prevDistanceToBall — переиспользуется ниже (в.1/в.2)
+        // как единственно честный признак "реально приближается", а не просто "шевелится".
+        float distDelta = (_prevDistanceToBall > 0f && curDist > 0f) ? (_prevDistanceToBall - curDist) : 0f;
+        bool  approachingBall = distDelta > centeringMinMovement;
         if (_prevDistanceToBall > 0f && curDist > 0f && curDist >= closeRadius)
         {
-            float delta = Mathf.Clamp(_prevDistanceToBall - curDist, -0.5f, 0.5f);
+            float delta = Mathf.Clamp(distDelta, -0.5f, 0.5f);
+            // Асимметрия (из feat/making-rl-work): штраф за отъезд ослаблен, но ТОЛЬКО когда
+            // рядом реально есть препятствие (иначе — арбитраж: подъезд к мячу дороже, чем
+            // симметричный откат, дешевле в backwardDistanceFactor раз — цикл "подъехать-
+            // откатиться" у мяча даёт ЧИСТУЮ положительную прибыль без единого захвата,
+            // ~45 очков за эпизод по расчёту при backwardDistanceFactor=0.5 и MaxStep=3500,
+            // это больше, чем сама grabSuccessReward). Скидка оправдана только когда отъезд
+            // реально вызван объездом препятствия, а не бесцельным качанием у цели.
+            if (delta < 0f)
+            {
+                // ТОЛЬКО leftIR/rightIR (жёстко на корпусе) — не УЗ. Та же причина, что и у
+                // wallProximityPenalty чуть ниже: УЗ механически привязан к повороту камеры
+                // (CameraAimController), а не корпуса, и во время поиска может смотреть куда
+                // угодно — "нашёл препятствие по УЗ" не значит "препятствие на пути отъезда".
+                bool nearObstacle = sensors != null && (sensors.leftIR == 1 || sensors.rightIR == 1);
+                delta *= nearObstacle ? backwardDistanceFactor : 1f;
+            }
             float expMul = Mathf.Exp(distanceRewardAlpha * (1f - Mathf.Clamp01(curDist)));
             float rDist = delta * distanceRewardScale * expMul;
             AddReward(rDist); _rewardDistance += rDist;
@@ -988,6 +1019,15 @@ public class RobotBrain : Agent
         //    Рост линейный до cap — не экспоненциальный: истинная exp(k×streak) взрывается
         //    на длинных streak'ах и вытесняет все остальные награды из градиента PPO.
         //
+        //    НАЙДЕН ЭКСПЛОЙТ (подтверждено на практике: Mean Reward растёт, SuccessRate стоит
+        //    на месте): "условие движения" раньше означало ЛЮБОЕ шевеление — forwardSpeed ИЛИ
+        //    steer выше порога. Чистое вращение на месте и бесцельное кружение по арене тоже
+        //    считались "движется", а centering/alignment сами по себе почти всегда true, когда
+        //    мяч просто виден, — это работа автономного PID (CameraAimController), не сети. Сеть
+        //    могла фармить оба streak'а, просто болтаясь рядом, вообще не приближаясь к мячу.
+        //    Условие заменено на approachingBall (см. блок (а) выше) — требует РЕАЛЬНОГО
+        //    сокращения дистанции до мяча, а не любого движения.
+        //
         //    STREAK-МЕХАНИКА (в.2) — bodyCameraAlignment, ПО ТОЙ ЖЕ ЛОГИКЕ:
         //    Раньше была флэт-награда за каждый шаг, где корпус развёрнут туда же, куда
         //    смотрит камера (alignment × bodyCameraAlignmentBonus) — тот же самый эксплойт:
@@ -998,10 +1038,8 @@ public class RobotBrain : Agent
         //    можно иметь alignment без centering (тело повёрнуто, мяч только появился
         //    в кадре, ещё не успел "зацентроваться") и наоборот.
         bool ballCentered = VisionIsVisible() && Mathf.Abs(VisionHorizontalAngle()) < centeringAngleThreshold;
-        bool robotMoving = Mathf.Abs(forwardSpeed) > centeringMinMovement
-                            || Mathf.Abs(steer) > centeringMinMovement;
 
-        if (ballCentered && robotMoving)
+        if (ballCentered && approachingBall)
             _centeringStreak = Mathf.Min(_centeringStreak + 1, centeringStreakCap);
         else
             _centeringStreak = 0;
@@ -1017,7 +1055,8 @@ public class RobotBrain : Agent
         float absServoAngle = Mathf.Abs(cameraAim != null ? cameraAim.CurrentAngleDeg : 0f);
         bool  bodyAligned    = VisionIsVisible() && absServoAngle <= bodyCameraAlignmentToleranceDeg;
 
-        if (bodyAligned && robotMoving)
+        // approachingBall = реально сокращает дистанцию до мяча, а не любое движение (см. эксплойт выше).
+        if (bodyAligned && approachingBall)
             _bodyAlignmentStreak = Mathf.Min(_bodyAlignmentStreak + 1, bodyAlignmentStreakCap);
         else
             _bodyAlignmentStreak = 0;
@@ -1039,10 +1078,11 @@ public class RobotBrain : Agent
         //    а не за реальную опасность на пути движения. УЗ остаётся информационным
         //    наблюдением для сети (см. CollectObservations), просто без отдельной награды.
         //    ИК же жёстко закреплены на корпусе — их направление стабильно и осмысленно.
+        //    БЫЛО расхождением с этим самым комментарием: строка с ultrasonicNormalized < 0.05
+        //    всё ещё штрафовала по УЗ, комментарий врал. Убрано — УЗ теперь чисто информационный.
         if (sensors != null)
         {
             float wallPen = 0f;
-            if (sensors.ultrasonicNormalized < 0.05f) wallPen += wallProximityPenalty;
             if (sensors.leftIR == 1) wallPen += wallProximityPenalty;
             if (sensors.rightIR == 1) wallPen += wallProximityPenalty;
             if (wallPen > 0f) { AddReward(-wallPen); _rewardWall -= wallPen; }
@@ -1070,8 +1110,14 @@ public class RobotBrain : Agent
             float searchSpeed = _lastVelocity.magnitude;
             if (searchSpeed > blindApproachMinForwardSpeed)
             {
-                AddReward(blindApproachBonus);
-                _rewardCenter += blindApproachBonus;  // логируем как part of "center/search" cluster
+                // Потолок за эпизод — плоская награда за шаг иначе умножается на длину эпизода
+                // (MaxStep=3500) без предела, см. тултип blindApproachEpisodeCap.
+                if (_blindApproachRewardThisEpisode < blindApproachEpisodeCap)
+                {
+                    AddReward(blindApproachBonus);
+                    _rewardCenter += blindApproachBonus;  // логируем как part of "center/search" cluster
+                    _blindApproachRewardThisEpisode += blindApproachBonus;
+                }
             }
             else
             {
@@ -1091,8 +1137,14 @@ public class RobotBrain : Agent
             float angCmd = Mathf.Abs(steer);
             if (linSpeed < gentleLinearSpeedThresh && angCmd < gentleAngularSpeedThresh)
             {
-                AddReward(gentlePlacementBonus);
-                _rewardDistance += gentlePlacementBonus;
+                // Потолок за эпизод — см. тултип gentlePlacementEpisodeCap: без него робот мог бы
+                // стоять чуть внутри closeRadius сколько угодно долго, не хватая мяч, и копить.
+                if (_gentlePlacementRewardThisEpisode < gentlePlacementEpisodeCap)
+                {
+                    AddReward(gentlePlacementBonus);
+                    _rewardDistance += gentlePlacementBonus;
+                    _gentlePlacementRewardThisEpisode += gentlePlacementBonus;
+                }
             }
             else
             {
@@ -1328,13 +1380,6 @@ public class RobotBrain : Agent
             if (v >= 0f && obstacleSpawner != null) obstacleSpawner.spawnCount = (int)v;
         }
 
-        // ── Точки спавна мяча (curriculum) ───────────────────────────────────
-        // 1 = только первая точка (простой этап), 9 = все точки (полная рандомизация)
-        {
-            float v = env.GetWithDefault("ball_spawn_count", -1f);
-            if (v >= 0f) ballSpawnCount = (int)v;
-        }
-
         // ── Respawn препятствий ───────────────────────────────────────────────
         // 1 = каждый эпизод, N = каждые N эпизодов, 0 = никогда
         {
@@ -1357,6 +1402,43 @@ public class RobotBrain : Agent
         return !(float.IsNaN(v.x) || float.IsInfinity(v.x) ||
                  float.IsNaN(v.y) || float.IsInfinity(v.y) ||
                  float.IsNaN(v.z) || float.IsInfinity(v.z));
+    }
+
+    /// <summary>
+    /// Случайная позиция мяча в прямоугольной зоне (центр ± halfExtents), заданной в инспекторе.
+    /// Зона выделена вручную и свободна от препятствий — reject-sampling по препятствиям не
+    /// используется, НО дистанция до робота проверяется (minRobotBallDistance) — при переносе
+    /// на зону из feat/making-rl-work эта проверка потерялась, мяч мог заспавниться вплотную
+    /// к роботу или на нём. До maxAttempts случайных попыток внутри зоны, иначе — отталкиваем
+    /// последнюю попытку от робота вдоль линии робот→мяч на minRobotBallDistance.
+    /// Высота (y) сохраняется от исходной позиции мяча.
+    /// </summary>
+    Vector3 SampleBallInZone(Vector3 robotPos)
+    {
+        Vector3 center = ballSpawnZoneCenter != null
+            ? ballSpawnZoneCenter.position
+            : _startPosition + arenaCenterOffset;
+        float hx = ballSpawnZoneHalfExtents.x;
+        float hz = ballSpawnZoneHalfExtents.y;
+
+        const int maxAttempts = 20;
+        Vector3 cand = _ballStartPosition;
+        for (int i = 0; i < maxAttempts; i++)
+        {
+            cand = new Vector3(center.x + Random.Range(-hx, hx),
+                               _ballStartPosition.y,
+                               center.z + Random.Range(-hz, hz));
+            if (!IsValid(cand)) continue;
+            float flatDist = Vector2.Distance(new Vector2(cand.x, cand.z), new Vector2(robotPos.x, robotPos.z));
+            if (flatDist >= minRobotBallDistance) return cand;
+        }
+
+        Vector3 away = cand - robotPos;
+        away.y = 0f;
+        if (away.sqrMagnitude < 0.0001f) away = Vector3.forward;
+        Vector3 pushed = robotPos + away.normalized * minRobotBallDistance;
+        pushed.y = _ballStartPosition.y;
+        return IsValid(pushed) ? pushed : _ballStartPosition;
     }
 
     /// <summary>
@@ -1413,6 +1495,14 @@ public class RobotBrain : Agent
             : (transform.position + arenaCenterOffset);
         Gizmos.color = Color.magenta;
         Gizmos.DrawWireCube(center, arenaHalfSize * 2f);
+
+        // Зона спавна мяча (из feat/making-rl-work) — зелёным, чтобы визуально проверять
+        // в редакторе, что вручную заданная зона реально не пересекается с препятствиями.
+        Vector3 zoneCenter = ballSpawnZoneCenter != null ? ballSpawnZoneCenter.position : center;
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireCube(zoneCenter, new Vector3(ballSpawnZoneHalfExtents.x * 2f,
+                                                     0.05f,
+                                                     ballSpawnZoneHalfExtents.y * 2f));
     }
 
     // Штраф за физическое столкновение с препятствием ИЛИ стеной арены.
